@@ -23,7 +23,7 @@
       <h1>Bienvenido a Nexus<span class="nova-accent">.</span></h1>
       <p>Tu espacio de trabajo, sin complicaciones. Configura tu negocio; tus datos permanecen en este dispositivo.</p>
       <form id="mobileAuthForm" class="mobile-form"></form>
-      <small id="mobileAuthMsg"></small>
+      <small id="mobileAuthMsg" role="status" aria-live="polite">Cargando configuración…</small><button id="novaRetry" type="button" hidden>Reintentar carga</button>
     </div>
   </section>
 
@@ -215,10 +215,21 @@
   </main>
 
   <script src="vendor/jspdf.umd.min.js"></script>
-  <script type="module" src="mobile.js"></script>
+  <script type="module">
+  import('./mobile.js').catch(err=>{
+    const msg=document.getElementById('mobileAuthMsg');
+    if(msg)msg.textContent='No se pudo iniciar la aplicación. Pulsa Reintentar carga.';
+    document.getElementById('novaRetry').hidden=false;
+    console.error('Nexus startup',err);
+  });
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+      let reloading=false;
+      const oldController=Boolean(navigator.serviceWorker.controller);
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{if(oldController&&!reloading){reloading=true;location.reload();}});
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{}));
+      document.getElementById('novaRetry').addEventListener('click',async()=>{try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update();reg?.waiting?.postMessage({type:'SKIP_WAITING'});}catch{}location.reload();});
     }
   </script>
 </body>
