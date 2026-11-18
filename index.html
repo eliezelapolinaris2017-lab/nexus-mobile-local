@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Nexus Mobile Local" />
+  <meta name="format-detection" content="telephone=yes" />
+  <meta name="theme-color" content="#f3f6fb" />
+  <title>Nexus Mobile Local · Facturación y Seguimiento</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="mobile.css" />
+  <link rel="stylesheet" href="mobile-field.css" />
+
+</head>
+<body>
+  <section id="mobileAuth" class="mobile-auth">
+    <div class="auth-panel">
+      <div class="app-mark">N</div>
+      <h1>Nexus Mobile Local</h1>
+      <p>Configura tu empresa para comenzar. Los datos se guardan en este dispositivo.</p>
+      <form id="mobileAuthForm" class="mobile-form"></form>
+      <small id="mobileAuthMsg"></small>
+    </div>
+  </section>
+
+  <main id="mobileApp" class="mobile-app hidden">
+    <header class="mobile-top">
+      <div>
+        <span id="mobileSync" class="sync-pill">Modo local</span>
+        <h1 id="mobileBusiness">Mi negocio</h1>
+        <p>Tu operación en la calle</p>
+      </div>
+      <button id="mobileLogout" type="button">Configurar</button>
+    </header>
+
+    <section id="mDashboard" class="mobile-view active">
+      <div class="field-heading"><span>OPERACIÓN MÓVIL</span><h2>Tu día, bajo control.</h2><p>Consulta tus trabajos, factura y atiende a tus clientes.</p></div>
+      <div class="quick-grid field-shortcuts"><button data-tab="mInvoice" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16 M4 12h16"/></svg><span>Nueva factura</span></button><button data-tab="mServices" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v14H3z M8 7V3h8v4 M3 12h18 M10 12v3h4v-3"/></svg><span>Mis trabajos</span></button><button data-tab="mClients" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M18 8a3 3 0 0 1 0 6 M22 21v-2a4 4 0 0 0-3-4"/></svg><span>Clientes</span></button><button data-tab="mFollowups" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg><span>Seguimientos</span></button></div>
+      <div class="mobile-hero">
+        <span>RESUMEN DEL NEGOCIO</span>
+        <h2 id="mMonthNet">$0.00</h2>
+        <p id="mMonthLabel">Cobrado del mes</p>
+      </div>
+      <div id="mBillingKpis" class="metric-grid"></div>
+      <div class="mobile-card slim-card">
+        <div class="section-row"><h3>Tipos de factura</h3><span class="muted">mes actual</span></div>
+        <div id="mTypeKpis" class="type-kpis"></div>
+      </div>
+      <div class="mobile-card">
+        <div class="section-row"><h3>Seguimientos críticos</h3><button data-tab="mFollowups" type="button">Ver</button></div>
+        <div id="mCriticalFollowups" class="mobile-list"></div>
+      </div>
+    </section>
+
+    <section id="mServices" class="mobile-view"><div class="mobile-card"><div class="section-row"><h3>Mis trabajos</h3><span class="muted">Pendientes y próximos</span></div><input id="mServiceSearch" class="search" type="search" placeholder="Buscar cliente o trabajo" aria-label="Buscar trabajos" /><details class="mobile-card"><summary>Nuevo trabajo</summary><form id="localServiceForm" class="mobile-form"><label>Cliente<select id="localServiceClient" required></select></label><label>Trabajo<input id="localServiceTitle" required></label><label>Fecha<input id="localServiceDate" type="date" required></label><label>Hora<input id="localServiceTime" type="time"></label><label>Notas<textarea id="localServiceNote"></textarea></label><button class="primary" type="submit">Guardar trabajo</button></form></details><div id="mServiceList" class="mobile-list"></div></div></section>
+    <section id="mMore" class="mobile-view"><div class="field-heading"><span>ESPACIO DE TRABAJO</span><h2>Más posibilidades.</h2><p>Herramientas para resolver desde donde estés.</p></div><div class="tool-grid">
+<button data-tab="mAgenda" data-icon="calendar" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v16H4z M8 2v6 M16 2v6 M4 10h16"/></svg><b>Agenda de trabajo</b><small>Hoy, próximos y pendientes</small></button>
+<button data-tab="mReceivable" data-icon="wallet" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h17v16H3z M3 5V3h14 M16 11h6v5h-6z"/></svg><b>Cuentas por cobrar</b><small>Balances y documentos</small></button>
+<button data-tab="mFollowups" data-icon="clock" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg><b>Seguimientos</b><small>Recordatorios y clientes</small></button>
+<button data-tab="mHistory" data-icon="history" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v6h6 M3 10a9 9 0 1 1 1 8 M12 7v5l4 2"/></svg><b>Historial</b><small>Consulta tu operación</small></button>
+<button data-tab="mCalculator" data-icon="calculator" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2h14v20H5z M8 5h8v4H8z M8 13h1 M15 13h1 M8 17h1 M15 17h1"/></svg><b>Calculadora de precio</b><small>Descuento, IVU y total</small></button>
+<button data-tab="mSync" data-icon="sync" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a9 9 0 0 1 16-5l2 3 M21 2v6h-6 M21 14a9 9 0 0 1-16 5l-2-3 M3 22v-6h6"/></svg><b>Aplicación</b><small>Empresa y almacenamiento local</small></button></div></section>
+    <section id="mAgenda" class="mobile-view"><div class="field-heading"><span>PLANIFICA TU DÍA</span><h2>Agenda de trabajo</h2><p>Consulta servicios abiertos por fecha.</p></div><div class="segmented" role="group" aria-label="Periodo de agenda"><button data-agenda-filter="today" type="button">Hoy</button><button data-agenda-filter="next" type="button" class="active">Próximos 7 días</button><button data-agenda-filter="overdue" type="button">Atrasados</button></div><div id="mAgendaList" class="mobile-list"></div></section>
+    <section id="mReceivable" class="mobile-view"><div class="field-heading"><span>COBROS</span><h2>Cuentas por cobrar</h2><p id="mReceivableTotal"></p></div><input id="mReceivableSearch" class="search" type="search" placeholder="Buscar cliente o factura" aria-label="Buscar balances"><div id="mReceivableList" class="mobile-list"></div></section>
+    <section id="mCalculator" class="mobile-view"><div class="field-heading"><span>HERRAMIENTA RÁPIDA</span><h2>Calcula tu precio</h2><p>Una referencia rápida antes de preparar la factura.</p></div><div class="mobile-card mobile-form"><label>Importe antes de IVU<input id="mCalcAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label><div class="two-col"><label>Descuento %<input id="mCalcDiscount" type="number" inputmode="decimal" min="0" max="100" value="0"></label><label>IVU %<input id="mCalcTax" type="number" inputmode="decimal" min="0" max="100" value="11.5"></label></div><div id="mCalcResult" aria-live="polite"></div></div></section>
+    <section id="mInvoices" class="mobile-view"><div class="field-heading"><span>FACTURACIÓN</span><h2>Facturas</h2><p>Busca una factura para verla, editarla o compartirla.</p></div><div class="section-row"><span id="mInvoicesCount" class="muted"></span><button data-tab="mInvoice" type="button">Nueva factura</button></div><input id="mInvoicesSearch" class="search" type="search" placeholder="Buscar cliente, número o servicio" aria-label="Buscar facturas"><label>Estado<select id="mInvoicesStatus"><option value="all">Todas las facturas</option><option>Pendiente</option><option>Parcial</option><option>Vencida</option><option>Pagada</option><option>Borrador</option><option>Cancelada</option></select></label><div id="mAllInvoiceList" class="mobile-list"></div><button id="mLoadMoreInvoices" type="button" hidden>Ver más facturas</button></section>
+    <section id="mInvoice" class="mobile-view">
+      <div class="section-row"><h2 id="mInvoiceEditorTitle">Nueva factura</h2><button id="mCancelInvoiceEdit" type="button" hidden>Cancelar edición</button></div>
+      <div class="step-bar">
+        <span class="active">1 Información</span><span>2 Líneas</span><span>3 Resumen</span><span>4 Guardar</span>
+      </div>
+
+      <form id="mInvoiceForm" class="mobile-form invoice-pro-form">
+        <div class="mobile-card">
+          <div class="section-row"><h3>Información general</h3><span class="muted"></span></div>
+          <div class="two-col">
+            <div class="client-picker" data-picker="mInvClient"><div class="picker-label"><label for="mInvClientSearch">Cliente *</label><button type="button" data-add-client="mInvClient">Nuevo cliente</button></div><input id="mInvClientSearch" type="search" placeholder="Escribe nombre, teléfono o email" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mInvClientResults" required><select id="mInvClient" hidden tabindex="-1" aria-hidden="true"></select><div id="mInvClientResults" class="client-results" role="listbox" hidden></div><small id="mInvClientSelected" class="picker-selected">Busca y selecciona un cliente existente.</small></div>
+            <label>Número de documento<input id="mInvNumber" placeholder="Se generará automáticamente" /></label>
+          </div>
+          <div class="two-col">
+            <label>Tipo de factura *<select id="mInvType"><option>Servicio</option><option>Mantenimiento</option><option>Instalación</option><option>Diagnóstico</option><option>Cotización</option><option>Reparación</option><option>Otro</option></select></label>
+            <label>Método de pago<select id="mInvPaymentMethod"><option value="">Seleccionar método</option><option>ATH Móvil</option><option>Tarjeta</option><option>Efectivo</option><option>Cheque</option><option>Transferencia</option><option>Stripe</option><option>PayPal</option></select></label>
+          </div>
+          <div class="two-col">
+            <label>Fecha *<input id="mInvDate" type="date" required /></label>
+            <label>Vence *<input id="mInvDue" type="date" required /></label>
+          </div>
+          <label>Estado *</label>
+          <div class="status-toggle" role="group" aria-label="Estado de la factura">
+            <button id="mStatusPending" class="active" data-invoice-status="Pendiente" type="button">Pendiente</button>
+            <button id="mStatusPaid" data-invoice-status="Pagada" type="button">Pagada</button>
+          </div>
+          <input id="mInvStatus" type="hidden" value="Pendiente" />
+          <label>Notas<textarea id="mInvNotes" rows="3" maxlength="300" placeholder="Notas internas o para el cliente"></textarea></label>
+        </div>
+
+        <div class="mobile-card">
+          <div class="section-row"><h3>Líneas de factura</h3><button id="mAddLineTop" type="button">+ Línea</button></div>
+          <div id="mInvoiceLines" class="invoice-lines"></div>
+          <div class="two-col"><button id="mAddLine" class="ghost-btn" type="button">+ Añadir servicio</button><button id="mAddDiscount" class="ghost-btn" type="button">− Añadir descuento</button></div>
+        </div>
+
+        <div class="mobile-card summary-card">
+          <div>
+            <h3>Resumen</h3>
+            <div class="summary-row"><span>Subtotal</span><b id="mInvSubtotal">$0.00</b></div>
+            <div class="summary-row"><span>Descuento</span><b id="mInvDiscountTotal">$0.00</b></div>
+            <div class="summary-row"><span>IVU</span><b id="mInvTax">$0.00</b></div>
+            <div class="summary-row total"><span>Total</span><b id="mInvTotal">$0.00</b></div>
+          </div>
+          <div class="summary-side">
+            <span>Estado del pago</span>
+            <strong id="mInvStatusText">Pendiente</strong>
+            <small id="mInvBalanceText">Balance: $0.00</small>
+          </div>
+        </div>
+
+        <div class="action-strip">
+          <button id="mSaveDraft" type="button">Guardar borrador</button>
+          <button id="mPreviewInvoice" type="button">Vista previa</button>
+          <button id="mViewLastDoc" type="button">Ver documento</button>
+        </div>
+        <button id="mSaveInvoice" class="primary big-save" type="submit">Guardar factura</button>
+      </form>
+
+      <div class="mobile-card">
+        <div class="section-row"><h3>Facturas recientes</h3><button data-tab="mInvoices" type="button">Ver todas</button><button id="mRefreshInvoices" type="button">Sync</button></div>
+        <div id="mInvoiceList" class="mobile-list"></div>
+      </div>
+    </section>
+
+    <section id="mFollowups" class="mobile-view">
+      <details class="mobile-card follow-create"><summary>Nuevo seguimiento <span>Programar recordatorio</span></summary>
+        <form id="mFollowupForm" class="mobile-form compact">
+          <div class="client-picker" data-picker="mFollowClient"><div class="picker-label"><label for="mFollowClientSearch">Cliente *</label><button type="button" data-add-client="mFollowClient">Nuevo cliente</button></div><input id="mFollowClientSearch" type="search" placeholder="Escribe el nombre del cliente" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mFollowClientResults" required><select id="mFollowClient" hidden tabindex="-1" aria-hidden="true"></select><div id="mFollowClientResults" class="client-results" role="listbox" hidden></div><small id="mFollowClientSelected" class="picker-selected">Busca por nombre o teléfono.</small></div>
+          <label>Tipo<select id="mFollowType"><option>Mantenimiento</option><option>Cotización</option><option>Instalación</option><option>Servicio</option><option>Garantía</option><option>Otro</option></select></label>
+          <label>Asunto<input id="mFollowTitle" placeholder="Mantenimiento preventivo 6 meses" required /></label>
+          <div class="two-col">
+            <label>Fecha<input id="mFollowDue" type="date" required /></label>
+            <label>Meses<input id="mFollowInterval" type="number" min="1" value="6" /></label>
+          </div>
+          <label>Prioridad<select id="mFollowPriority"><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
+          <button class="primary" type="submit">Guardar seguimiento</button>
+        </form>
+      </details>
+      <input id="mFollowSearch" class="search" type="search" placeholder="Buscar cliente o seguimiento" aria-label="Buscar seguimientos">
+      <div class="filter-bar">
+        <button data-follow-filter="all" class="active" type="button">Todos</button>
+        <button data-follow-filter="due" type="button">Vencidos</button>
+        <button data-follow-filter="next" type="button">Próximos</button>
+        <button data-follow-filter="maint" type="button">Mantenimientos</button>
+      </div>
+      <div id="mFollowupList" class="mobile-list"></div>
+    </section>
+
+    <section id="mClients" class="mobile-view">
+      <details id="mNewClientPanel" class="mobile-card client-create"><summary>Nuevo cliente <span>Crear contacto</span></summary>
+        <form id="mClientForm" class="mobile-form compact client-mobile-form">
+          <label>Nombre del cliente *<input id="mClientName" autocomplete="name" placeholder="Nombre o compañía" required /></label>
+          <div class="two-col">
+            <label>Teléfono / WhatsApp<input id="mClientPhone" inputmode="tel" autocomplete="tel" placeholder="787-000-0000" /></label>
+            <label>Email<input id="mClientEmail" type="email" autocomplete="email" placeholder="cliente@email.com" /></label>
+          </div>
+          <div class="two-col">
+            <label>Pueblo<input id="mClientCity" autocomplete="address-level2" placeholder="San Juan" /></label>
+            <label>Etiqueta<select id="mClientTag"><option value="">Sin etiqueta</option><option>VIP</option><option>Corporativo</option><option>Residencial</option><option>Garantía</option><option>Moroso</option><option>Mantenimiento</option></select></label>
+          </div>
+          <label>Dirección<textarea id="mClientAddress" rows="2" autocomplete="street-address" placeholder="Dirección física del servicio"></textarea></label>
+          <label>Notas<textarea id="mClientNotes" rows="2" placeholder="Notas administrativas, equipos, acceso, contacto alterno…"></textarea></label>
+          <div class="action-strip client-actions">
+            <button id="mClearClient" type="button">Limpiar</button>
+            <button class="primary" type="submit">Guardar cliente</button>
+          </div>
+        </form>
+      </details>
+
+      <div class="mobile-card">
+        <div class="section-row"><h3>Clientes</h3><span id="mClientCount" class="muted"></span></div>
+        <input id="mClientSearch" class="search" type="search" placeholder="Buscar cliente, teléfono o email" />
+        <div id="mClientList" class="mobile-list"></div>
+      </div>
+    </section>
+
+    <section id="mHistory" class="mobile-view">
+      <div class="mobile-card">
+        <div class="section-row"><h3>Historial compartido</h3><span class="muted">cliente + factura + seguimiento</span></div>
+        <input id="mHistorySearch" class="search" type="search" placeholder="Buscar por cliente o número" />
+        <div id="mHistoryList" class="timeline"></div>
+      </div>
+    </section>
+
+    <section id="mSync" class="mobile-view">
+      <div class="mobile-card">
+        <h3>Configuración y respaldo</h3>
+        <p>Base de datos independiente. Exporta respaldos regularmente; borrar datos del navegador puede eliminar tus registros.</p>
+        <form id="localSettingsForm" class="mobile-form"></form><div class="mobile-card"><h3>Respaldo y futura nube</h3><p>Exporta un JSON para migrar posteriormente. Supabase no está conectado. Guarda el respaldo en un lugar seguro.</p><button id="localExport" type="button">Exportar respaldo</button><label>Restaurar respaldo<input id="localImport" type="file" accept=".json,application/json"></label></div><div id="mInstallBox" class="install-box"></div>
+        <div id="mSyncDetails" class="sync-details"></div>
+        <button id="mInstallBtn" type="button">Instalar / añadir a inicio</button>
+        <button id="mForceReload" class="primary" type="button">Buscar actualización</button>
+      </div>
+    </section>
+
+    <div id="mDocModal" class="doc-modal hidden" role="dialog" aria-modal="true">
+      <div class="doc-shell">
+        <div class="doc-actions">
+          <button id="mCloseDoc" type="button">Cerrar</button>
+          <button id="mShareDoc" type="button">Compartir</button>
+          <button id="mPrintDoc" type="button">Imprimir/PDF</button>
+        </div>
+        <div id="mDocPreview" class="doc-preview"></div>
+      </div>
+    </div>
+
+    <nav class="mobile-tabs" aria-label="Navegación móvil">
+      <button class="active" data-tab="mDashboard" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10 12 3l9 7v10H3z M9 20v-7h6v7"/></svg>Inicio</button>
+      <button data-tab="mServices" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v14H3z M8 7V3h8v4 M3 12h18 M10 12v3h4v-3"/></svg>Trabajos</button>
+      <button data-tab="mInvoices" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3h14v18l-3-2-4 2-4-2-3 2z M8 7h8 M8 11h8 M8 15h5"/></svg>Facturas</button><button data-tab="mInvoice" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16 M4 12h16"/></svg>Nueva</button>
+      <button data-tab="mClients" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M18 8a3 3 0 0 1 0 6 M22 21v-2a4 4 0 0 0-3-4"/></svg>Clientes</button>
+      <button data-tab="mMore" type="button"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg>Más</button>
+    </nav>
+  </main>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script type="module" src="mobile.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+    }
+  </script>
+</body>
+</html>
