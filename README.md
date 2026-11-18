@@ -1,4 +1,4 @@
-# Nexus Mobile Local — 1.0 (preliminar)
+# Nexus Mobile Local — 1.1 (preliminar)
 PWA separada de Nexus Suite. Interfaz extraída de business-modern- commit 36a44ed94784bea8e5a7f97284f04054af274201. No se copiaron credenciales, clientes, facturas, logo comercial ni archivos de configuración Firebase.
 
 ## Arranque
@@ -9,3 +9,6 @@ IndexedDB, exclusivo del origen/dispositivo. No requiere cuenta de la Suite. Exp
 
 ## Estado
 Código preliminar, pendiente de pruebas en navegador/iPhone, incluida creación de clientes, facturas, cobros, PDF, trabajos, restauración y modo avión. No usar datos reales antes de esas pruebas. No hay integración Supabase activa, ni portal de clientes, ni procesamiento de pagos en línea. Migración a nueva nube pendiente. La numeración se reserva de forma transaccional en IndexedDB; no es un sistema multi-dispositivo.
+
+## Publicación de prueba
+https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/ — GitHub Pages solamente. Sin Vercel. Para pruebas con datos ficticios, no operación comercial hasta validar condiciones de alojamiento y seguridad. La base local usa un nombre propio y la PWA tiene alcance limitado a su directorio; otros sitios alojados en el mismo origen podrían acceder al almacenamiento, por lo que se recomienda un origen exclusivo antes de uso real.

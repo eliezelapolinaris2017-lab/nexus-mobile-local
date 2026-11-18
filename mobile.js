@@ -2,7 +2,7 @@ import { searchClients, normalizeClientSearch } from './client-search.js';
 import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
-const APP_VERSION = 'Local 1.0';
+const APP_VERSION = 'Local 1.1';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -18,9 +18,10 @@ const db = null;
 const $ = id => document.getElementById(id);
 const money = n => Number(n || 0).toLocaleString('es-PR', { style: 'currency', currency: 'USD' });
 const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
-const today = () => new Date().toISOString().slice(0, 10);
-const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + Number(n || 0)); return d.toISOString().slice(0, 10); };
-const plusMonths = (date, months = 6) => { const d = new Date((date || today()) + 'T12:00:00'); d.setMonth(d.getMonth() + Number(months || 6)); return d.toISOString().slice(0, 10); };
+const localDate=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+const today = () => localDate(new Date());
+const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + Number(n || 0)); return localDate(d); };
+const plusMonths = (date, months = 6) => { const d = new Date((date || today()) + 'T12:00:00'); d.setMonth(d.getMonth() + Number(months || 6)); return localDate(d); };
 
 let unsub = [];
 let state = { profile:null, clients:[], services:[], quotes:[], followups:[], invoices:[], payments:[], assets:[], contracts:[] };
@@ -56,7 +57,7 @@ function newLine(description='', qty=1, price=0, discount=0, taxable=true){ retu
 function ensureLines(){ if(!invoiceLines.length) invoiceLines = [newLine('', 1, 0)]; }
 function isDiscountLine(l){ return Number(l.price) === 0 && l.taxable === false; }
 function lineNet(l){ if(isDiscountLine(l)) return -Math.max(0, Number(l.discount)||0); return Math.max(0, (Number(l.qty||0) * Number(l.price||0)) - Number(l.discount||0)); }
-function invoiceCalc(){ const subtotal = invoiceLines.reduce((a,l)=>a + Number(l.qty||0)*Number(l.price||0), 0); const discount = invoiceLines.reduce((a,l)=>a + Number(l.discount||0), 0); const taxableBase = invoiceLines.filter(l=>l.taxable !== false).reduce((a,l)=>a + lineNet(l), 0); const ivu = taxableBase * taxRate(); const total = Math.max(0, subtotal - discount + ivu); return { subtotal, discount, ivu, total }; }
+function invoiceCalc(){const round=x=>Math.round((x+Number.EPSILON)*100)/100;const subtotal=round(invoiceLines.reduce((a,l)=>a+Number(l.qty||0)*Number(l.price||0),0));const discount=round(invoiceLines.reduce((a,l)=>a+Number(l.discount||0),0));const taxableBase=invoiceLines.filter(l=>l.taxable!==false).reduce((a,l)=>a+lineNet(l),0);const ivu=round(taxableBase*taxRate());return {subtotal,discount,ivu,total:round(Math.max(0,subtotal-discount+ivu))};}
 function cleanPayload(obj){
   return Object.fromEntries(Object.entries(obj).filter(([,v]) => v !== undefined));
 }
@@ -93,7 +94,7 @@ let documentOrigin=null;
 function switchTab(id){
   if (!document.getElementById(id)?.classList.contains('mobile-view')) return;
   viewMemory.save();
-  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Aplicación y sincronización',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio'};
+  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio'};
   document.querySelector('.mobile-top p').textContent = titles[id] || 'Nexus Mobile Local';
   document.querySelectorAll('.mobile-tabs button').forEach(b => {
     const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator'].includes(id));
@@ -125,6 +126,7 @@ document.addEventListener('click', async e => {
   const preview = e.target.closest('#mPreviewInvoice'); if(preview){ openInvoiceDoc(null, buildInvoicePreviewObject('Vista previa')); return; }
   const last = e.target.closest('#mViewLastDoc'); if(last){ if(lastCreatedInvoiceId) openInvoiceDoc(lastCreatedInvoiceId); else openInvoiceDoc(null, buildInvoicePreviewObject('Vista previa')); return; }
   if(e.target.id === 'mCloseDoc'){ closeDoc(); return; }
+  if(e.target.id === 'mDownloadDoc'){try{const inv=state.invoices.find(i=>i.id===currentDocId)||buildInvoicePreviewObject('Vista previa');const name='Factura-'+String(inv.number||'Vista-previa').replace(/[^a-z0-9_-]+/gi,'-')+'.pdf';downloadPdfFile(await buildInvoicePdfFile(inv,name),name);}catch(err){showMobileNotice('No se pudo generar PDF: '+err.message,'danger');}return;}
   if(e.target.id === 'mPrintDoc'){ printCurrentDoc(); return; }
   if(e.target.id === 'mShareDoc'){ shareCurrentDoc(); return; }
   if(e.target.id === 'applyUpdateBtn'){ applyWaitingUpdate(); return; }
@@ -451,8 +453,10 @@ async function saveInvoice(forcedStatus){
   const c = clientBy($('mInvClient').value); if(!c.id) return alert('Selecciona cliente.');
   ensureLines();
   const validLines = invoiceLines.filter(l => String(l.description || '').trim() && Number(l.qty || 0) > 0);
+  if(invoiceLines.some(l=>!String(l.description||'').trim()||!Number.isFinite(l.qty)||l.qty<=0||!Number.isFinite(l.price)||l.price<0||!Number.isFinite(l.discount)||l.discount<0||(!isDiscountLine(l)&&l.discount>l.qty*l.price)))return alert('Revisa todas las líneas: descripción, cantidad, precio y descuentos.');
   if(!validLines.length) return alert('Añade al menos una línea con descripción y cantidad.');
   const calc = invoiceCalc();
+  if(calc.discount>calc.subtotal)return alert('El descuento no puede exceder el subtotal.');
   let status = forcedStatus || $('mInvStatus').value || 'Pendiente';
   if(existing){const paid=invoicePaid(existing);if(existing.status==='Pagada'&&paid===0){if(Math.abs(calc.total-Number(existing.total))>0.005)return alert('Esta factura figura pagada sin cobros vinculados. Revisa sus cobros antes de cambiar el total.');status='Pagada';}if(calc.total+0.005<paid)return alert('El total no puede ser menor al importe ya cobrado.');if(status==='Pagada'&&existing.status!=='Pagada'&&calc.total-paid>0.005)return alert('Guarda los cambios como pendiente y registra el pago desde Saldar factura.');status=paid>0?(calc.total-paid<=0.005?'Pagada':'Parcial'):(existing.status==='Pagada'?'Pagada':status==='Borrador'?'Borrador':'Pendiente');}
   const number = $('mInvNumber').value || 'INV-M-' + String(Date.now()).slice(-7);
