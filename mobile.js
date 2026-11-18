@@ -2,7 +2,7 @@ import { searchClients, normalizeClientSearch } from './client-search.js';
 import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
-const APP_VERSION = 'Local 2.0.1';
+const APP_VERSION = 'Local 2.0.2';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -76,8 +76,8 @@ function setupPwaInstall(){
         worker.addEventListener('statechange', () => { if(worker.state === 'installed' && navigator.serviceWorker.controller){ updateWaiting = worker; showUpdateToast(); } });
       });
     }).catch(()=>{});
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if(refreshing) return; refreshing = true; location.reload(); });
+    // El arranque inicial no debe recargar la página ni interrumpir el formulario.
+    // La actualización de un controlador previo se gestiona en index.html.
   }
 }
 function showUpdateToast(){

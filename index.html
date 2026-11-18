@@ -227,7 +227,7 @@
     if ('serviceWorker' in navigator) {
       let reloading=false;
       const oldController=Boolean(navigator.serviceWorker.controller);
-      navigator.serviceWorker.addEventListener('controllerchange',()=>{if(oldController&&!reloading){reloading=true;location.reload();}});
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{if(oldController&&!reloading){reloading=true;const form=document.getElementById('mobileAuthForm');if(form?.dataset.dirty==='true'){document.getElementById('novaRetry').hidden=false;return;}location.reload();}});
       window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{}));
       document.getElementById('novaRetry').addEventListener('click',async()=>{try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update();reg?.waiting?.postMessage({type:'SKIP_WAITING'});}catch{}location.reload();});
     }
