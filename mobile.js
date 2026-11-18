@@ -1,6 +1,6 @@
 import { searchClients, normalizeClientSearch } from './client-search.js';
 import { createViewMemory } from './ui-context.js';
-import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber } from './local-db.js';
+import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 const APP_VERSION = 'Local 1.0';
 let deferredInstallPrompt = null;
@@ -33,7 +33,7 @@ function taxRate(){ const inv=state.invoices.find(i=>i.id===editingInvoiceId);re
 function invoicePaid(inv){ return state.payments.filter(p => p.invoiceId === inv.id).reduce((a, p) => a + Number(p.amount || 0), 0); }
 function invoicePaymentMethods(inv){ return [...new Set(state.payments.filter(p => p.invoiceId === inv.id).map(p => String(p.method || '').trim()).filter(Boolean))]; }
 function invoicePaymentTerms(inv, fallback='Pago según acuerdo.'){ const methods=invoicePaymentMethods(inv); if(!methods.length) return fallback; return `${methods.length>1?'Métodos de pago':'Método de pago'}: ${methods.join(', ')}.`; }
-function invoiceBalance(inv){ return Math.max(0, Number(inv.total || 0) - invoicePaid(inv)); }
+function invoiceBalance(inv){ if(['Cancelada','Borrador'].includes(inv.status))return 0;return Math.max(0, Math.round((Number(inv.total || 0) - invoicePaid(inv))*100)/100); }
 function invoiceStatus(inv){ const bal = invoiceBalance(inv), paid = invoicePaid(inv); if(String(inv.status||'') === 'Cancelada') return 'Cancelada'; if(String(inv.status||'') === 'Borrador') return 'Borrador'; if(bal <= 0 || String(inv.status||'') === 'Pagada') return 'Pagada'; if(inv.dueDate && inv.dueDate < today()) return 'Vencida'; return paid > 0 ? 'Parcial' : 'Pendiente'; }
 function statusBadge(status){ const s = String(status || 'Pendiente'); const cls = s === 'Pagada' || s === 'Completado' ? 'ok' : (s === 'Vencida' || s === 'Urgente' || s === 'Vencido' ? 'danger' : (s === 'Próximo' || s === 'Parcial' || s === 'Pendiente' ? 'warn' : '')); return `<span class="badge ${cls}">${esc(s)}</span>`; }
 function sorted(arr, key='date'){ return [...(arr || [])].sort((a,b) => String(b[key] || '').localeCompare(String(a[key] || ''))); }
@@ -241,7 +241,7 @@ async function saveMobileClient(e){
   try{
   const ref = await addDoc(colRef('clients'), payload);
   e.target.reset();
-  setSync('Cliente guardado · sincronizando');
+  setSync('Cliente guardado localmente');
   switchTab('mInvoice');
   if(!state.clients.some(c=>c.id===ref.id))state.clients.push({id:ref.id,...payload});
   renderSelects();
@@ -303,7 +303,7 @@ function renderSummary(){
 }
 function renderDashboard(){
   const month = today().slice(0,7);
-  const monthInvoices = state.invoices.filter(i => String(i.date || '').startsWith(month));
+  const monthInvoices = state.invoices.filter(i => !['Cancelada','Borrador'].includes(i.status)&&String(i.date || '').startsWith(month));
   const monthPayments = state.payments.filter(p => String(p.date || '').startsWith(month));
   const invoiced = monthInvoices.reduce((a,i) => a + Number(i.total || 0), 0);
   const paid = monthPayments.reduce((a,p) => a + Number(p.amount || 0), 0);
@@ -466,11 +466,8 @@ async function saveInvoice(forcedStatus){
     const back=invoiceEditReturnView;resetMobileInvoiceEditor();renderAll();if(back)switchTab(back);openInvoiceDoc(existing.id,updated);return;
   }
   payload.number=await nextInvoiceNumber(db,uid(),state.invoices,payload.date);
-  const ref = await addDoc(colRef('invoices'), payload);
+  const ref = await createInvoiceWithPayment(payload);
   lastCreatedInvoiceId = ref.id;
-  if(status === 'Pagada'){
-    await addDoc(colRef('payments'), { invoiceId:ref.id, invoiceNumber:payload.number, date:$('mInvDate').value || today(), method:$('mInvPaymentMethod').value || 'Móvil', amount:calc.total, note:'Pago registrado al crear factura móvil', createdAt:serverTimestamp() });
-  }
   await createAutoFollowupFromInvoice(ref.id, payload).catch(err => console.warn('No se pudo crear seguimiento automático:', err));
   resetMobileInvoiceEditor();openInvoiceDoc(null, { id:ref.id, ...payload });
   }catch(error){alert('No se pudo guardar la factura: '+(error.message||error));}
@@ -518,7 +515,7 @@ async function completeFollowup(id){
     alert(firebaseMessage(err));
   }
 }
-async function markInvoicePaid(id){ const inv = state.invoices.find(i => i.id === id); if(!inv) return; const bal = invoiceBalance(inv); if(bal <= 0) return; await addDoc(colRef('payments'), { invoiceId:inv.id, invoiceNumber:inv.number, date:today(), method:'Móvil', amount:bal, note:'Pago registrado desde Nexus Mobile Local', createdAt:serverTimestamp() }); await updateDoc(docRef('invoices', id), { status:'Pagada', paymentMethod:'Móvil', updatedAt:serverTimestamp() }); }
+async function markInvoicePaid(id){try{const inv=state.invoices.find(i=>i.id===id);if(!inv)return;const method=prompt('Método de pago (efectivo, ATH Móvil, tarjeta, cheque, transferencia…)',inv.paymentMethod||'Efectivo');if(method===null||!method.trim())return;await settleInvoice(id,today(),method.trim());showMobileNotice('Cobro registrado','ok');}catch(e){showMobileNotice(e.message,'danger');}}
 async function imageToDataUrl(src){
   if(!src) return '';
   try{

@@ -22,3 +22,24 @@ export async function deleteDoc(ref){check(ref.c);await transact(true,v=>{delete
 export async function nextInvoiceNumber(_db,_uid,_invoices,date){const year=String(date||new Date().toISOString()).slice(0,4);if(!/^\d{4}$/.test(year))throw new Error('Fecha inválida');return transact(true,v=>{const prefix='FAC-'+year+'-';const max=Object.values(v.records.invoices).reduce((m,x)=>String(x.number||'').startsWith(prefix)?Math.max(m,Number(x.number.slice(prefix.length))||0):m,0);const next=Math.max(max,v.sequences[year]||0)+1;v.sequences[year]=next;return prefix+String(next).padStart(4,'0');});}
 function validate(b){if(!b||b.schema!==1||!b.profile||typeof b.profile.businessName!=='string'||!b.profile.businessName.trim()||!b.records||!b.sequences)throw new Error('Respaldo no válido');for(const c of collections){if(!b.records[c]||Array.isArray(b.records[c])||typeof b.records[c]!=='object')throw new Error('Colección inválida: '+c);for(const [id,r] of Object.entries(b.records[c]))if(!/^[\w-]{1,128}$/.test(id)||['__proto__','constructor','prototype'].includes(id)||!r||typeof r!=='object'||Array.isArray(r))throw new Error('Registro inválido');}if(Object.entries(b.sequences).some(([k,n])=>!/^\d{4}$/.test(k)||!Number.isSafeInteger(n)||n<0))throw new Error('Secuencia inválida');if(!Number.isFinite(Number(b.profile.tax))||Number(b.profile.tax)<0||Number(b.profile.tax)>100)throw new Error('IVU inválido');for(const k of ['logo','logoPdf','logoDashboard'])if(b.profile[k]&&!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(b.profile[k]))throw new Error('Logo inválido');}
 export async function restoreWorkspace(b){validate(b);await transact(true,v=>{v.profile=clone(b.profile);v.records=Object.fromEntries(collections.map(c=>[c,clone(b.records[c])]));v.sequences=clone(b.sequences);});for(const c of collections)notify(c);}
+
+export async function createInvoiceWithPayment(invoice){
+  const id=crypto.randomUUID();
+  await transact(true,v=>{
+    if(Object.values(v.records.invoices).some(i=>i.number===invoice.number))throw new Error('Número de factura repetido');
+    v.records.invoices[id]=clone(invoice);
+    if(invoice.status==='Pagada'&&Number(invoice.total)>0){
+      const pid=crypto.randomUUID();
+      v.records.payments[pid]={invoiceId:id,invoiceNumber:invoice.number,date:invoice.date,method:invoice.paymentMethod||'Móvil',amount:Number(invoice.total),createdAt:serverTimestamp(),note:'Pago registrado al crear factura móvil'};
+    }
+  });notify('invoices');notify('payments');return {id};
+}
+export async function settleInvoice(id,date,method){
+  const amount=await transact(true,v=>{
+    const inv=v.records.invoices[id];if(!inv||['Cancelada','Borrador'].includes(inv.status))throw new Error('Factura no disponible para cobro');
+    const paid=Object.values(v.records.payments).filter(p=>p.invoiceId===id).reduce((sum,p)=>sum+Number(p.amount||0),0);
+    const balance=Math.round((Number(inv.total||0)-paid)*100)/100;if(balance<=0)return 0;
+    const pid=crypto.randomUUID();v.records.payments[pid]={invoiceId:id,invoiceNumber:inv.number,date,method,amount:balance,note:'Pago registrado desde Nexus Mobile Local',createdAt:serverTimestamp()};
+    Object.assign(inv,{status:'Pagada',paymentMethod:method,updatedAt:serverTimestamp()});return balance;
+  });notify('invoices');notify('payments');return amount;
+}

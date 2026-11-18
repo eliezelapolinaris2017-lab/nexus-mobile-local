@@ -4,7 +4,7 @@ const base='http://127.0.0.1:8080/';
 for(const engine of [chromium,webkit]){
  const browser=await engine.launch({headless:true});
  try{
- const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.type()==='prompt'?d.accept('Efectivo'):d.accept());
  await page.goto(base);await page.locator('#localSetupName').fill('Prueba Local');await page.locator('#mobileAuthForm button[type=submit]').click();await page.locator('#mobileApp').waitFor({state:'visible'});
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await page.reload();await page.locator('#mobileApp').waitFor({state:'visible'});
  await page.locator('nav [data-tab=mClients]').click();await page.locator('#mNewClientPanel summary').click();await page.locator('#mClientName').fill('Cliente de prueba');await page.locator('#mClientPhone').fill('7875550100');await page.locator('#mClientForm button[type=submit]').click();
@@ -17,7 +17,7 @@ for(const engine of [chromium,webkit]){
  let backup=await workspace();assert.equal(Object.keys(backup.records.clients).length,1);assert.equal(Object.keys(backup.records.invoices).length,1);
  assert.equal(Object.values(backup.records.invoices)[0].total,111.5);
  await page.locator('nav [data-tab=mServices]').click();await page.locator('#mServices summary').click();await page.locator('#localServiceClient').selectOption(Object.keys(backup.records.clients)[0]);await page.locator('#localServiceTitle').fill('Trabajo prueba');await page.locator('#localServiceForm button[type=submit]').click();await page.getByText('Trabajo prueba',{exact:true}).waitFor();
- await page.locator('nav [data-tab=mInvoices]').click();await page.locator('#mAllInvoiceList [data-mark-paid]').first().click();
+ await page.locator('nav [data-tab=mMore]').click();await page.locator('#mMore [data-tab=mReceivable]').click();await page.locator('#mReceivableList [data-mark-paid]').first().click();
  await page.waitForFunction(async()=>Object.keys((await (await import('/local-db.js')).exportWorkspace()).records.payments).length===1);
  backup=await workspace();assert.equal(Object.values(backup.records.payments)[0].amount,111.5);
  await page.evaluate(async()=>{const m=await import('/local-db.js');const b=await m.exportWorkspace();await m.restoreWorkspace(b);});
