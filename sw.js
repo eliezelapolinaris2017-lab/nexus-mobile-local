@@ -1,5 +1,5 @@
-const CACHE='nexus-mobile-local-v1.1';
-const ASSETS=['./index.html','./mobile.js','./mobile.css','./mobile-field.css','./standalone-ui.js','./local-db.js','./client-search.js','./ui-context.js','./vendor/jspdf.umd.min.js','./manifest.webmanifest','./icon.svg'];
+const CACHE='nexus-mobile-local-v2.0';
+const ASSETS=['./index.html','./mobile.js','./mobile.css','./mobile-field.css','./nova.css','./standalone-ui.js','./local-db.js','./client-search.js','./ui-context.js','./vendor/jspdf.umd.min.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{for(const k of await caches.keys())if(k.startsWith('nexus-mobile-local-')&&k!==CACHE)await caches.delete(k);await self.clients.claim();})()));
 self.addEventListener('message',e=>{if(e.data?.type==='SKIP_WAITING')self.skipWaiting();});

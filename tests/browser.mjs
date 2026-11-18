@@ -5,7 +5,7 @@ for(const engine of [chromium,webkit]){
  const browser=await engine.launch({headless:true});
  try{
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.type()==='prompt'?d.accept('Efectivo'):d.accept());
- await page.goto(base);await page.locator('#localSetupName').fill('Prueba Local');await page.locator('#mobileAuthForm button[type=submit]').click();await page.locator('#mobileApp').waitFor({state:'visible'});
+ await page.goto(base);await page.locator('#localSetupName').fill('Prueba Local');await page.locator('#mobileAuthForm button[type=submit]').click();await page.locator('#mobileApp').waitFor({state:'visible'});assert.equal(await page.locator('.nova-tile').count(),6);assert.equal(await page.locator('.nova-metric').count(),4);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await page.reload();await page.locator('#mobileApp').waitFor({state:'visible'});
  await page.locator('nav [data-tab=mClients]').click();await page.locator('#mNewClientPanel summary').click();await page.locator('#mClientName').fill('Cliente de prueba');await page.locator('#mClientPhone').fill('7875550100');await page.locator('#mClientForm button[type=submit]').click();
  await page.locator('#mInvoice.active').waitFor();await page.locator('[data-line-field=description]').first().fill('Servicio de prueba');await page.locator('[data-line-field=price]').first().fill('100');

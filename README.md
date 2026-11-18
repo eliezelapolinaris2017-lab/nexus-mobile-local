@@ -1,4 +1,4 @@
-# Nexus Mobile Local — 1.1 (preliminar)
+# Nexus Mobile Local — 2.0 (preliminar)
 PWA separada de Nexus Suite. Interfaz extraída de business-modern- commit 36a44ed94784bea8e5a7f97284f04054af274201. No se copiaron credenciales, clientes, facturas, logo comercial ni archivos de configuración Firebase.
 
 ## Arranque
@@ -12,3 +12,6 @@ Código preliminar, pendiente de pruebas en navegador/iPhone, incluida creación
 
 ## Publicación de prueba
 https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/ — GitHub Pages solamente. Sin Vercel. Para pruebas con datos ficticios, no operación comercial hasta validar condiciones de alojamiento y seguridad. La base local usa un nombre propio y la PWA tiene alcance limitado a su directorio; otros sitios alojados en el mismo origen podrían acceder al almacenamiento, por lo que se recomienda un origen exclusivo antes de uso real.
+
+## Diseño NOVA 2.0
+Nueva capa visual móvil: panel de cobros, tarjetas de acceso, navegación renovada, formularios legibles y diseño adaptativo. Se conserva la base IndexedDB y la implementación de documentos y operaciones. Los datos existentes no se migran ni se borran.
