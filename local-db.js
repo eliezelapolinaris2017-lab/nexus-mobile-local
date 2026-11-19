@@ -1,3 +1,4 @@
+import {maintenanceReminder,completeMaintenance,maintenanceDate} from './maintenance.js';
 const KEY='nexus-mobile-local-v1';
 const coreCollections=['clients','services','quotes','followups','invoices','payments','assets','contracts'];
 const financeCollections=['expenses','suppliers','purchases','purchasePayments','inventory','stockUsage'];
@@ -40,8 +41,8 @@ function check(c){if(!collections.includes(c))throw new Error('Colección no vá
 function notify(c){for(const cb of listeners.get(c)||[])cb();channel?.postMessage(c);}
 if(channel)channel.onmessage=e=>{if(e.data==='cloud-change'){globalThis.dispatchEvent?.(new Event('nova-local-change'));return;}for(const cb of listeners.get(e.data)||[])cb();};
 export function onSnapshot(ref,success,error){check(ref.c);let active=true;const load=()=>transact(false,v=>Object.entries(v.records[ref.c]).map(([id,data])=>({id,data:()=>clone(data)}))).then(docs=>{if(active)success({docs});}).catch(e=>{if(active)error?.(e);});if(!listeners.has(ref.c))listeners.set(ref.c,new Set());listeners.get(ref.c).add(load);load();return()=>{active=false;listeners.get(ref.c)?.delete(load);};}
-export async function addDoc(ref,data){check(ref.c);const id=crypto.randomUUID();await transact(true,v=>{v.records[ref.c][id]=clone(data);if(ref.c==='expenses'&&data.receipt&&new TextEncoder().encode(JSON.stringify(snapshot(v))).length>10000000)throw Error('La base se acerca al límite de almacenamiento. Guarda el gasto sin foto y conserva el recibo aparte.');});notify(ref.c);return {id};}
-export async function updateDoc(ref,data){check(ref.c);await transact(true,v=>{if(!Object.hasOwn(v.records[ref.c],ref.id))throw new Error('Registro no encontrado');v.records[ref.c][ref.id]={...v.records[ref.c][ref.id],...clone(data)};});notify(ref.c);}
+export async function addDoc(ref,data){check(ref.c);const id=crypto.randomUUID();await transact(true,v=>{v.records[ref.c][id]=clone(data);if(['services','invoices'].includes(ref.c))maintenanceReminder(v.records,ref.c==='services'?'service':'invoice',id,v.records[ref.c][id],maintenanceDate());if(ref.c==='expenses'&&data.receipt&&new TextEncoder().encode(JSON.stringify(snapshot(v))).length>10000000)throw Error('La base se acerca al límite de almacenamiento. Guarda el gasto sin foto y conserva el recibo aparte.');});notify(ref.c);if(['services','invoices'].includes(ref.c))notify('followups');return {id};}
+export async function updateDoc(ref,data){check(ref.c);await transact(true,v=>{if(!Object.hasOwn(v.records[ref.c],ref.id))throw new Error('Registro no encontrado');const old=v.records[ref.c][ref.id];const current=v.records[ref.c][ref.id]={...old,...clone(data)};if(ref.c==='services'&&['Completado','Completada','Facturado'].includes(current.status)&&!['Completado','Completada','Facturado'].includes(old.status)){current.completedAt=current.completedAt||maintenanceDate();maintenanceReminder(v.records,'service',ref.id,current,maintenanceDate());}if(ref.c==='invoices')maintenanceReminder(v.records,'invoice',ref.id,current,maintenanceDate());});notify(ref.c);if(['services','invoices'].includes(ref.c))notify('followups');}
 export async function deleteDoc(ref){check(ref.c);await transact(true,v=>{delete v.records[ref.c][ref.id];});notify(ref.c);}
 export async function nextInvoiceNumber(_db,_uid,_invoices,date){const year=String(date||new Date().toISOString()).slice(0,4);if(!/^\d{4}$/.test(year))throw new Error('Fecha inválida');return transact(true,v=>{const prefix='FAC-'+year+'-';const max=Object.values(v.records.invoices).reduce((m,x)=>String(x.number||'').startsWith(prefix)?Math.max(m,Number(x.number.slice(prefix.length))||0):m,0);const next=Math.max(max,v.sequences[year]||0)+1;v.sequences[year]=next;return prefix+String(next).padStart(4,'0');});}
 function validate(b){if(!b||b.schema!==1||!b.profile||typeof b.profile.businessName!=='string'||!b.profile.businessName.trim()||!b.records||!b.sequences)throw new Error('Respaldo no válido');for(const c of collections){if(financeCollections.includes(c)&&b.records[c]===undefined)continue;if(!b.records[c]||Array.isArray(b.records[c])||typeof b.records[c]!=='object')throw new Error('Colección inválida: '+c);for(const [id,r] of Object.entries(b.records[c]))if(!/^[\w-]{1,128}$/.test(id)||['__proto__','constructor','prototype'].includes(id)||!r||typeof r!=='object'||Array.isArray(r))throw new Error('Registro inválido');}if(Object.entries(b.sequences).some(([k,n])=>!/^\d{4}$/.test(k)||!Number.isSafeInteger(n)||n<0))throw new Error('Secuencia inválida');if(!Number.isFinite(Number(b.profile.tax))||Number(b.profile.tax)<0||Number(b.profile.tax)>100)throw new Error('IVU inválido');for(const k of ['logo','logoPdf','logoDashboard'])if(b.profile[k]&&!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(b.profile[k]))throw new Error('Logo inválido');}
@@ -51,12 +52,12 @@ export async function createInvoiceWithPayment(invoice){
   const id=crypto.randomUUID();
   await transact(true,v=>{
     if(Object.values(v.records.invoices).some(i=>i.number===invoice.number))throw new Error('Número de factura repetido');
-    v.records.invoices[id]=clone(invoice);
+    v.records.invoices[id]=clone(invoice);maintenanceReminder(v.records,'invoice',id,v.records.invoices[id],maintenanceDate());
     if(invoice.status==='Pagada'&&Number(invoice.total)>0){
       const pid=crypto.randomUUID();
       v.records.payments[pid]={invoiceId:id,invoiceNumber:invoice.number,date:invoice.date,method:invoice.paymentMethod||'Móvil',amount:Number(invoice.total),createdAt:serverTimestamp(),note:'Pago registrado al crear factura móvil'};
     }
-  });notify('invoices');notify('payments');return {id};
+  });notify('invoices');notify('payments');notify('followups');return {id};
 }
 export async function settleInvoice(id,date,method){
   const amount=await transact(true,v=>{
@@ -95,3 +96,5 @@ export async function useStock({productId,invoiceId,qty,date}){
  const cost=cents(qty*Number(item.avgCost))/100;item.stock=Math.round((Number(item.stock)-qty)*1000)/1000;v.records.stockUsage[crypto.randomUUID()]={productId,invoiceId,qty,date,cost,productName:item.name,createdAt:serverTimestamp()};
  });notify('inventory');notify('stockUsage');
 }
+
+export async function finishMaintenanceFollowup(id,day){const changed=await transact(true,v=>completeMaintenance(v.records,id,day));if(changed)notify('followups');return changed;}

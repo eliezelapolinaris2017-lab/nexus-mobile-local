@@ -1,13 +1,14 @@
 import { searchClients, normalizeClientSearch } from './client-search.js';
 import { createViewMemory } from './ui-context.js';
-import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
+import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice,finishMaintenanceFollowup } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
 import { createFinance } from './finance.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
 import { setupHvac } from './hvac-codes.js';
-const APP_VERSION = 'NOVA 3.1.1 HVAC';
+import {maintenanceKind,maintenanceMessage,addMonthsClamped} from './maintenance.js';
+const APP_VERSION = 'NOVA 3.2 HVAC';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -16,6 +17,7 @@ let currentDocSnapshot = null;
 let invoiceLines = [];
 let lastCreatedInvoiceId = null;
 let editingInvoiceId = null;
+let invoiceServiceId='';
 let invoiceSaving = false;
 let mobileInvoiceListLimit=40;
 let invoiceEditReturnView=null;
@@ -27,7 +29,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&
 const localDate=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const today = () => localDate(new Date());
 const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + Number(n || 0)); return localDate(d); };
-const plusMonths = (date, months = 6) => { const d = new Date((date || today()) + 'T12:00:00'); d.setMonth(d.getMonth() + Number(months || 6)); return localDate(d); };
+const plusMonths = (date, months = 6) => addMonthsClamped(date||today(),Number(months||6));
 
 let unsub = [];
 let state = { profile:null, clients:[], services:[], quotes:[], followups:[], invoices:[], payments:[], assets:[], contracts:[], expenses:[], suppliers:[], purchases:[], purchasePayments:[], inventory:[], stockUsage:[] };
@@ -114,7 +116,7 @@ function switchTab(id){
 
 document.addEventListener('click', async e => {
   const tab = e.target.closest('[data-tab]'); if(tab){ if(tab.dataset.tab==='mInvoice'&&editingInvoiceId)resetMobileInvoiceEditor();switchTab(tab.dataset.tab); return; }
-  const invClient = e.target.closest('[data-new-invoice-client]'); if(invClient){ startInvoiceForClient(invClient.dataset.newInvoiceClient); return; }
+  const invClient = e.target.closest('[data-new-invoice-client]'); if(invClient){ startInvoiceForClient(invClient.dataset.newInvoiceClient,invClient.dataset.invoiceService||''); return; }
   if(e.target.closest('#mClearClient')){ $('mClientForm')?.reset(); return; }
   const f = e.target.closest('[data-follow-filter]'); if(f){ currentFilter = f.dataset.followFilter; document.querySelectorAll('[data-follow-filter]').forEach(b => b.classList.toggle('active', b === f)); renderFollowups(); return; }
   const complete = e.target.closest('[data-complete-follow]'); if(complete){ await completeFollowup(complete.dataset.completeFollow); return; }
@@ -263,11 +265,12 @@ async function saveMobileClient(e){
   }catch(error){showMobileNotice('No se pudo guardar el cliente. '+firebaseMessage(error),'danger');}
   finally{if(button)button.disabled=false;}
 }
-function startInvoiceForClient(clientId){
-  if(editingInvoiceId)resetMobileInvoiceEditor();
+function startInvoiceForClient(clientId,serviceId=''){
+  if(editingInvoiceId||invoiceServiceId||serviceId)resetMobileInvoiceEditor();invoiceServiceId=serviceId;
   switchTab('mInvoice');
   const sel = $('mInvClient');
   if(sel)chooseMobileClient('mInvClient',clientId||'');
+  if(serviceId){const s=state.services.find(x=>x.id===serviceId);if(s){$('mInvType').value=maintenanceKind(s)||'Servicio';invoiceLines=[newLine(s.title||s.serviceTitle||'Servicio',1,0)];renderInvoiceLines();renderSummary();}}
   $('mInvClientSearch')?.scrollIntoView({block:'center'});
 }
 function setInvoiceStatus(status){
@@ -373,7 +376,8 @@ function maintenanceHistorySentence(f){
   return 'Según nuestro registro, el último mantenimiento de tu aire fue en '+month+'. ';
 }
 function mobileFollowupMessage(f,c){
-  const name=String(f.clientName||c.name||'').trim();
+  const name=String(c.name||f.clientName||'').trim();
+  if(f.autoMaintenance||/manten/i.test(f.type||''))return maintenanceMessage(f,name,state.profile?.businessName);
   if(mobileIsQuoteFollowup(f)){
     const quote=state.quotes.find(q=>q.id===f.sourceId) || {};
     const number=String(f.quoteNumber||quote.number||'').trim();
@@ -388,7 +392,7 @@ Gracias por considerar a ${state.profile?.businessName || 'nuestro negocio'}.`;
   }
   return `Hola${name?', '+name:''}, te escribimos de ${state.profile?.businessName || 'nuestro negocio'}. ${maintenanceHistorySentence(f)}Queríamos saber cómo te ha ido con el servicio. Si todavía no has coordinado el mantenimiento, puedo ayudarte con una fecha.`;
 }
-function followCard(f){ const c = clientBy(f.clientId); const phone = phoneLink(c); const text=mobileFollowupMessage(f,c); return `<div class="row-card"><div class="top"><div><h4>${esc(f.title || f.type || 'Seguimiento')}</h4><p>${esc(f.clientName || c.name || 'Cliente')} · ${esc(f.dueDate || 'Sin fecha')}</p></div>${statusBadge(followStatus(f))}</div><p>${esc(f.type || '')} · cada ${esc(f.intervalMonths || 6)} meses</p><div class="actions">${phone ? `<a href="${phone}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}<button data-complete-follow="${esc(f.id)}" type="button">Completar</button><button class="danger" data-delete-follow="${esc(f.id)}" type="button">Borrar</button></div></div>`; }
+function followCard(f){ const c = clientBy(f.clientId); const phone = phoneLink(c); const text=mobileFollowupMessage(f,c); return `<div class="row-card"><div class="top"><div><h4>${esc(f.title || f.type || 'Seguimiento')}</h4><p>${esc(f.clientName || c.name || 'Cliente')} · ${esc(f.dueDate || 'Sin fecha')}</p></div>${statusBadge(followStatus(f))}</div><p>${esc(f.type || '')} · cada ${esc(f.intervalMonths || 6)} meses${f.lastServiceDate?' · Último servicio: '+esc(niceDate(f.lastServiceDate)):''}</p><div class="actions">${phone ? `<a href="${phone}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${followStatus(f)!=='Completado'?`<button data-complete-follow="${esc(f.id)}" type="button">${/manten/i.test(f.type||'')?'Mantenimiento realizado':'Completar'}</button>`:''}<button class="danger" data-delete-follow="${esc(f.id)}" type="button">Borrar</button></div></div>`; }
 
 function renderFollowups(){
   let rows = followupRows();
@@ -423,7 +427,7 @@ function renderSyncDetails(){
   $('mSyncDetails').innerHTML = [['Versión', APP_VERSION], ['Estado', online], ['Modo', standalone], ['Clientes', state.clients.length], ['Facturas', state.invoices.length], ['Cobros', state.payments.length], ['Seguimientos', state.followups.length], ['Cotizaciones', state.quotes.length], ['Servicios', state.services.length]].map(x => `<div class="metric"><small>${x[0]}</small><b>${x[1]}</b></div>`).join('');
 }
 function resetMobileInvoiceEditor(){
-  editingInvoiceId=null;
+  editingInvoiceId=null;invoiceServiceId='';
   $('mInvoiceForm').reset();
   invoiceLines=[newLine('',1,0)];
   $('mInvoiceEditorTitle').textContent='Nueva factura';
@@ -437,7 +441,7 @@ function editMobileInvoice(id){
   const inv=state.invoices.find(i=>i.id===id);if(!inv)return;
   invoiceEditReturnView=document.querySelector('.mobile-view.active')?.id||'mInvoices';
   if(inv.status==='Cancelada')return alert('La factura está cancelada.');
-  editingInvoiceId=id;
+  editingInvoiceId=id;invoiceServiceId=inv.serviceId||'';
   const set=(id,value)=>{$(id).value=value??'';};
   switchTab('mInvoice');
   if(!state.clients.some(c=>c.id===inv.clientId))state.clients.push({id:inv.clientId,name:inv.clientName||'Cliente'});
@@ -470,6 +474,8 @@ async function saveInvoice(forcedStatus){
   if(existing){const paid=invoicePaid(existing);if(existing.status==='Pagada'&&paid===0){if(Math.abs(calc.total-Number(existing.total))>0.005)return alert('Esta factura figura pagada sin cobros vinculados. Revisa sus cobros antes de cambiar el total.');status='Pagada';}if(calc.total+0.005<paid)return alert('El total no puede ser menor al importe ya cobrado.');if(status==='Pagada'&&existing.status!=='Pagada'&&calc.total-paid>0.005)return alert('Guarda los cambios como pendiente y registra el pago desde Saldar factura.');status=paid>0?(calc.total-paid<=0.005?'Pagada':'Parcial'):(existing.status==='Pagada'?'Pagada':status==='Borrador'?'Borrador':'Pendiente');}
   const number = $('mInvNumber').value || 'INV-M-' + String(Date.now()).slice(-7);
   const payload = { number, date:$('mInvDate').value, dueDate:$('mInvDue').value, clientId:c.id, clientName:c.name || '', invoiceType:$('mInvType').value, serviceTitle:validLines[0]?.description || $('mInvType').value, items:validLines.map(l => ({ description:l.description, qty:Number(l.qty||1), price:Number(l.price||0), discount:Number(l.discount||0), taxable:l.taxable !== false, total:lineNet(l) })), subtotal:calc.subtotal, discount:calc.discount, ivu:calc.ivu, tax:calc.ivu, taxPercent:taxRate()*100, total:calc.total, status, notes:$('mInvNotes').value, terms:'Pago según acuerdo.', sourceType:'mobile-v62', paymentMethod:$('mInvPaymentMethod').value || '', updatedAt:serverTimestamp(), createdAt:serverTimestamp() };
+  if(invoiceServiceId&&state.services.find(s=>s.id===invoiceServiceId)?.clientId!==c.id)return alert('El trabajo vinculado corresponde a otro cliente.');
+  payload.serviceId=invoiceServiceId||existing?.serviceId||'';
   invoiceSaving=true;const button=$('mSaveInvoice');if(button)button.disabled=true;
   try{
   if(existing){
@@ -481,52 +487,16 @@ async function saveInvoice(forcedStatus){
   payload.number=await nextInvoiceNumber(db,uid(),state.invoices,payload.date);
   const ref = await createInvoiceWithPayment(payload);
   lastCreatedInvoiceId = ref.id;
-  await createAutoFollowupFromInvoice(ref.id, payload).catch(err => console.warn('No se pudo crear seguimiento automático:', err));
   resetMobileInvoiceEditor();openInvoiceDoc(null, { id:ref.id, ...payload });
   }catch(error){alert('No se pudo guardar la factura: '+(error.message||error));}
   finally{invoiceSaving=false;if(button)button.disabled=false;}
 }
-async function createAutoFollowupFromInvoice(invoiceId, inv){
-  const type = String(inv.invoiceType || inv.type || '').toLowerCase();
-  const shouldCreate = type.includes('mant') || type.includes('instal');
-  if(!shouldCreate || !inv.clientId) return;
-  const dueDate = plusMonths(inv.date || today(), 6);
-  const followType = type.includes('instal') ? 'Instalación' : 'Mantenimiento';
-  await addDoc(colRef('followups'), cleanPayload({
-    clientId:inv.clientId,
-    clientName:inv.clientName || '',
-    clientPhone:clientBy(inv.clientId).phone || clientBy(inv.clientId).whatsapp || '',
-    type:followType,
-    title:followType === 'Instalación' ? 'Seguimiento post-instalación / mantenimiento 6 meses' : 'Mantenimiento preventivo 6 meses',
-    date:dueDate,
-    dueDate,
-    nextDate:dueDate,
-    intervalMonths:6,
-    status:'Programado',
-    priority:'Normal',
-    channel:'WhatsApp',
-    note:'Creado automáticamente desde factura móvil.',
-    sourceType:'invoice-mobile',
-    sourceId:invoiceId,
-    createdByUid:uid(),
-    createdAt:serverTimestamp(),
-    updatedAt:serverTimestamp()
-  }));
-}
 async function completeFollowup(id){
-  const f = state.followups.find(x => x.id === id); if(!f) return;
-  try{
-    await updateDoc(docRef('followups', id), { status:'Completado', completedAt:today(), updatedAt:serverTimestamp() });
-    if(String(f.type || '').toLowerCase().includes('mant')){
-      const dueDate = plusMonths(today(), Number(f.intervalMonths || 6));
-      await addDoc(colRef('followups'), cleanPayload({ clientId:f.clientId || '', clientName:f.clientName || '', clientPhone:f.clientPhone || '', assetId:f.assetId || '', assetName:f.assetName || '', type:'Mantenimiento', title:f.title || 'Mantenimiento preventivo 6 meses', date:dueDate, dueDate, nextDate:dueDate, intervalMonths:Number(f.intervalMonths || 6), status:'Programado', priority:f.priority || 'Normal', channel:f.channel || 'WhatsApp', sourceType:'recurring-mobile', sourceId:id, createdByUid:uid(), createdAt:serverTimestamp(), updatedAt:serverTimestamp() }));
-    }
-    showMobileNotice('Seguimiento completado.', 'ok');
-  }catch(err){
-    console.error('Error completando seguimiento:', err);
-    showMobileNotice(firebaseMessage(err), 'danger');
-    alert(firebaseMessage(err));
-  }
+ const f=state.followups.find(x=>x.id===id);if(!f||f.status==='Completado')return;
+ const maintenance=/manten/i.test(f.type||'');
+ if(!confirm(maintenance?'¿Confirmas que el mantenimiento ya se realizó? Se programará el próximo.':'¿Completar seguimiento?'))return;
+ try{await finishMaintenanceFollowup(id,today());showMobileNotice(maintenance?'Mantenimiento realizado · próximo seguimiento programado.':'Seguimiento completado.','ok');}
+ catch(err){showMobileNotice(err.message,'danger');}
 }
 async function markInvoicePaid(id){try{const inv=state.invoices.find(i=>i.id===id);if(!inv)return;const method=prompt('Método de pago (efectivo, ATH Móvil, tarjeta, cheque, transferencia…)',inv.paymentMethod||'Efectivo');if(method===null||!method.trim())return;await settleInvoice(id,today(),method.trim());showMobileNotice('Cobro registrado','ok');}catch(e){showMobileNotice(e.message,'danger');}}
 async function imageToDataUrl(src){
@@ -752,7 +722,7 @@ function renderServices(){
   }).sort((a,b)=>String(a.date || '9999').localeCompare(String(b.date || '9999')));
   $('mServiceList').innerHTML = rows.length ? rows.map(s=>{
     const c=clientBy(s.clientId), address=c.address || c.city || '', phone=String(c.phone || '').replace(/[^+0-9]/g,'');
-    return `<article class="row-card"><div class="top"><div><h4>${esc(s.title || s.serviceType || 'Servicio')}</h4><p>${esc(s.clientName || c.name || 'Cliente')}</p></div>${statusBadge(s.status || s.fields?.[3] || 'Programado')}</div><p>${esc(s.date || 'Sin fecha')} ${esc(s.time || '')}</p><p>${esc(address)}</p><div class="actions">${phone?`<a href="tel:${esc(phone)}">Llamar</a>`:''}${phoneLink(c)?`<a href="${phoneLink(c)}" target="_blank" rel="noopener">WhatsApp</a>`:''}${address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}" target="_blank" rel="noopener">Ver ruta</a>`:''}<button data-local-complete="${esc(s.id)}" type="button">Completar</button><button data-new-invoice-client="${esc(s.clientId || '')}" type="button">Facturar cliente</button></div></article>`;
+    return `<article class="row-card"><div class="top"><div><h4>${esc(s.title || s.serviceType || 'Servicio')}</h4><p>${esc(s.clientName || c.name || 'Cliente')}</p></div>${statusBadge(s.status || s.fields?.[3] || 'Programado')}</div><p>${esc(s.date || 'Sin fecha')} ${esc(s.time || '')}</p><p>${esc(address)}</p><div class="actions">${phone?`<a href="tel:${esc(phone)}">Llamar</a>`:''}${phoneLink(c)?`<a href="${phoneLink(c)}" target="_blank" rel="noopener">WhatsApp</a>`:''}${address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}" target="_blank" rel="noopener">Ver ruta</a>`:''}<button data-local-complete="${esc(s.id)}" type="button">Completar</button><button data-new-invoice-client="${esc(s.clientId || '')}" data-invoice-service="${esc(s.id)}" type="button">Facturar trabajo</button></div></article>`;
   }).join('') : '<div class="empty">No hay trabajos pendientes para esta búsqueda.</div>';
 }
 $('mServiceSearch')?.addEventListener('input', renderServices);

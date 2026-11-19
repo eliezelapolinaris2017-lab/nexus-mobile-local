@@ -49,3 +49,6 @@ Factura PDF tamaño carta US Letter. Guardar, compartir e imprimir usan el mismo
 Catálogo offline de 152 referencias por fabricante y serie (Midea, Gree, Daikin, Panasonic, LG). Las definiciones son orientativas y llevan enlaces de origen; los códigos no son universales. Las comprobaciones por categoría no sustituyen el manual de servicio ni autorizan puentear protecciones. Se elimina únicamente la calculadora rápida; IVU de factura, configuración y finanzas se conservan. Iconos redimensionados y colores HVAC de alto contraste. No se altera el generador de facturas.
 
 3.1.1: reutiliza el icono oficial Nova Cloud en el encabezado y acceso, conserva el nombre de la empresa y renueva la caché PWA.
+
+## Nova 3.2 HVAC
+Seguimientos preventivos al completar trabajos o emitir facturas de instalación/mantenimiento (no borradores), seis meses calendario. Facturar desde trabajo o agenda conserva vínculo y evita duplicados para esa visita. Al marcar mantenimiento realizado se programa el próximo. Avisos desde 14 días antes y WhatsApp preparado para envío por el usuario. No automatiza envío externo ni reescribe historial en bloque. Logo en confirmación pública.

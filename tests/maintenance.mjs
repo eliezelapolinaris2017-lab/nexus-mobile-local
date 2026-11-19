@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {maintenanceKind,addMonthsClamped,maintenanceReminder,completeMaintenance,maintenanceMessage} from '../maintenance.js';
+const records={clients:{c:{name:'Cliente',phone:'7875550100'}},services:{s:{clientId:'c',title:'Instalación mini split',date:'2026-08-31',status:'Programado'}},invoices:{},followups:{}};
+assert.equal(addMonthsClamped('2026-08-31'),'2027-02-28');assert.equal(addMonthsClamped('2027-08-31'),'2028-02-29');assert.equal(maintenanceKind({title:'Diagnóstico'}),'');
+assert.equal(maintenanceReminder(records,'service','s',records.services.s,'2026-11-19'),false);
+Object.assign(records.services.s,{status:'Completado',completedAt:'2026-11-19'});
+assert.ok(maintenanceReminder(records,'service','s',records.services.s,'2026-11-19'));assert.equal(records.followups['maint-service-s'].dueDate,'2027-05-19');assert.equal(records.followups['maint-service-s'].type,'Mantenimiento');
+const inv={clientId:'c',serviceId:'s',invoiceType:'Instalación',date:'2026-11-19',status:'Pendiente'};
+maintenanceReminder(records,'invoice','i',inv,'2026-11-19');assert.equal(Object.keys(records.followups).length,1);assert.equal(maintenanceReminder(records,'invoice','i',inv,'2026-11-19'),false);assert.equal(maintenanceReminder(records,'invoice','d',{...inv,serviceId:'',status:'Borrador'},'2026-11-19'),false);
+assert.match(maintenanceMessage(records.followups['maint-service-s'],'Cliente','Empresa'),/instalación/);
+assert.ok(completeMaintenance(records,'maint-service-s','2027-05-22'));assert.equal(Object.values(records.followups).find(f=>f.sourceType==='recurring-mobile').dueDate,'2027-11-22');assert.equal(completeMaintenance(records,'maint-service-s','2027-05-22'),false);
+console.log('Mantenimiento: 14 comprobaciones correctas');

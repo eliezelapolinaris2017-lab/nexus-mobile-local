@@ -1,3 +1,4 @@
+import {maintenanceMessage} from './maintenance.js';
 // Derived from actual records, never sends customer messages on its own.
 const validDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T12:00:00Z'));
 const dateOf=d=>typeof d==='string'&&validDate(d.slice(0,10))?d.slice(0,10):'';
@@ -20,8 +21,9 @@ export function deriveAlerts(state,{day,invoiceBalance,invoiceStatus,inactiveDay
  }
  for(const follow of state.followups){
   const date=dateOf(follow.dueDate);
-  if(done(follow)||!date||date>nextWeek)continue;
-  add('seguimientos','followup',follow,{date,title:date<day?'Seguimiento vencido':'Seguimiento próximo',detail:follow.title||follow.type||'Seguimiento',source:'followups',priority:date<=day?0:1});
+  const maintenance=follow.autoMaintenance||/manten/i.test(follow.type||'');
+  if(done(follow)||!date||date>(maintenance?shift(day,14):nextWeek))continue;
+  add('seguimientos','followup',follow,{date,title:date<day?'Seguimiento vencido':'Seguimiento próximo',detail:follow.title||follow.type||'Seguimiento',maintenance,maintenanceOrigin:follow.maintenanceOrigin,lastServiceDate:follow.lastServiceDate,assetName:follow.assetName,source:'followups',priority:date<=day?0:1});
  }
  const last=new Map();
  const recordActivity=(id,date)=>{const d=dateOf(date);if(id&&d&&d<=day&&d>(last.get(id)||''))last.set(id,d);};
@@ -30,7 +32,7 @@ export function deriveAlerts(state,{day,invoiceBalance,invoiceStatus,inactiveDay
  for(const i of state.invoices)if(!['Cancelada','Borrador'].includes(i.status)&&i.status)recordActivity(i.clientId,i.date);
  const activeScheduled=new Set(state.services.filter(s=>!done(s)&&dateOf(s.date)>=day).map(s=>s.clientId));
  for(const c of state.clients){
-  if(c.novaNoMarketing===true||activeScheduled.has(c.id))continue;
+  if(c.novaNoMarketing===true||activeScheduled.has(c.id)||state.followups.some(f=>f.clientId===c.id&&!done(f)&&(f.autoMaintenance||/manten/i.test(f.type||''))))continue;
   const date=last.get(c.id);if(!date||date>cutoff)continue;
   add('clientes','inactive',c,{clientId:c.id,clientName:c.name||'Cliente',phone:c.phone||c.whatsapp||'',date,title:'Cliente por recuperar',detail:'Sin servicio registrado desde '+date,source:'clients',priority:2});
  }
@@ -43,6 +45,7 @@ export function alertMessage(a,business,money){
  const hello='Hola, '+a.clientName+'. Te saludamos de '+(business||'nuestro negocio')+'.\n\n';
  if(a.category==='agenda')return hello+'Te recordamos tu cita de '+a.service+' para el '+localDate(a.date)+' a las '+clock(a.time)+'. '+(a.pending?'Por favor, confírmanos tu asistencia.':'Gracias por confirmar. Nos vemos en tu cita.');
  if(a.category==='cobros')return hello+'Según nuestros registros, la factura '+a.number+' tiene un balance pendiente de '+money(a.balance)+'. ¿Podrías confirmarnos cuándo podemos coordinar el pago? Si ya realizaste el pago, por favor ignora este recordatorio y compártenos el comprobante. Gracias.';
+ if(a.category==='seguimientos'&&a.maintenance)return maintenanceMessage(a,a.clientName,business);
  if(a.category==='seguimientos')return hello+'Queríamos dar seguimiento a '+a.detail+'. ¿Te gustaría que coordinemos una fecha? Quedamos a tu disposición.';
  return hello+'Según nuestro registro, tu último servicio fue en '+new Date(a.date+'T12:00:00').toLocaleDateString('es-PR',{month:'long',year:'numeric'})+'. Quería saber cómo está funcionando tu equipo. Si deseas coordinar un servicio o mantenimiento, podemos ayudarte con una fecha.';
 }
