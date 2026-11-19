@@ -8,7 +8,7 @@ let nextSignupAt=0,nextRecoveryAt=0,authWorking=false,recoveryToken=null;
 function authError(e){
  const code=e.code||'';
  if(e.status===429||code==='over_email_send_rate_limit'||code==='over_request_rate_limit')return 'Supabase ha limitado temporalmente los envíos de correo. No crees otra cuenta. Usa el enlace de verificación que ya recibiste y luego inicia sesión; si no llegó, vuelve a intentar más tarde.';
- if(code==='email_not_confirmed')return 'Verifica tu correo electrónico y vuelve a NOVA para iniciar sesión.';
+ if(code==='email_not_confirmed')return 'Tu correo aún no está confirmado. Abre el enlace recibido o pulsa Reenviar confirmación; luego inicia sesión.';
  if(code==='invalid_credentials'||/invalid login credentials/i.test(e.message))return 'Correo o contraseña incorrectos. Si ya creaste y verificaste tu cuenta, utiliza esos mismos datos.';
  if(code==='user_already_exists')return 'Ya existe una cuenta con este correo. Inicia sesión.';
  if(code==='email_address_not_authorized')return 'El servicio gratuito de correo de Supabase todavía no admite esta dirección. Es necesario configurar un remitente SMTP autorizado.';
@@ -139,6 +139,17 @@ async function authenticate(email,password,signup){
  }catch(e){paint(authError(e));}
  finally{busy=false;authControls(false);if(session){await hydrate();if(ready)sync();}}
 }
+async function resendConfirmation(){
+ if(authWorking||busy||transitioning||session)return;
+ const email=el('novaLoginPanel').querySelector('[name=email]');
+ if(!email.reportValidity())return;
+ if(Date.now()<nextSignupAt){paint('Ya solicitaste un correo. Revisa tu bandeja de entrada y spam. Espera un minuto para reenviar.');return;}
+ const button=el('novaResendConfirmation');
+ authControls(true);button.disabled=true;nextSignupAt=Date.now()+60000;
+ try{await request('/auth/v1/resend?redirect_to='+encodeURIComponent(AUTH_RETURN),{method:'POST',body:{type:'signup',email:email.value.trim()}});paint('Si tu cuenta está pendiente de confirmación y el envío está habilitado, recibirás un enlace nuevo. Revisa tu correo y spam.');}
+ catch(e){paint(authError(e));}
+ finally{authControls(false);button.disabled=false;}
+}
 async function requestReset(){
  if(authWorking||busy||transitioning)return;
  const email=el('novaLoginPanel').querySelector('[name=email]');
@@ -193,7 +204,7 @@ export function setupCloud(onOpen){openApp=onOpen;view('login');
  document.querySelectorAll('[data-cloud-logout],[data-cloud-exit]').forEach(b=>b.addEventListener('click',logout));
  el('novaMigrateLocal').addEventListener('click',async()=>{if(!confirm('¿Vincular los datos de este dispositivo a tu cuenta NOVA? Se conservarán los registros y enlaces anteriores.'))return;try{await finishOnboarding(true);}catch(e){message(e.message);}});
  el('novaMigrateRemote').addEventListener('click',recover);el('novaRetryAccount').addEventListener('click',hydrate);
- el('novaForgotPassword').addEventListener('click',requestReset);el('novaResetForm').addEventListener('submit',resetPassword);el('novaCancelReset').addEventListener('click',()=>{recoveryToken=null;el('novaResetForm').reset();view('login');message('');});el('novaLoadBackups').addEventListener('click',listBackups);
+ el('novaResendConfirmation').addEventListener('click',resendConfirmation);el('novaForgotPassword').addEventListener('click',requestReset);el('novaResetForm').addEventListener('submit',resetPassword);el('novaCancelReset').addEventListener('click',()=>{recoveryToken=null;el('novaResetForm').reset();view('login');message('');});el('novaLoadBackups').addEventListener('click',listBackups);
  window.addEventListener('nova-local-change',()=>{if(ready)paint(navigator.onLine?'Guardando cambios en Supabase…':'Sin internet · guardado local.');schedule();});window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
  window.addEventListener('focus',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});setInterval(()=>{if(!document.hidden)sync();},30000);
  if(recoveryToken){view('reset');message('Introduce tu contraseña nueva.');return;}
