@@ -5,3 +5,64 @@
 
 /* Nova Cloud account plan */
 .nova-trial-offer{display:flex;flex-direction:column;gap:4px;padding:14px 16px;margin:0 0 14px;background:#e6f4f5;border:1px solid #c1dfe3;border-radius:14px;color:#14334b;text-align:left}.nova-trial-offer strong{font-size:18px}.nova-trial-offer span{font-size:14px;line-height:1.45}.nova-billing-card{border:1px solid #c1dfe3!important;overflow-wrap:anywhere}.nova-billing-kicker{display:block;letter-spacing:.08em;font-size:12px;font-weight:800;color:#126a82;margin-bottom:8px}.nova-billing-card h3{font-size:20px;margin:0 0 8px}.nova-billing-card p{font-size:15px;line-height:1.5;margin:8px 0}.nova-billing-note{border-top:1px solid #dbe5ed;padding-top:10px}.nova-billing-card[data-state="ended"]{border-color:#d7b580!important}
+
+/* 3.3.1 · SaaS access. Deliberately scoped to authentication and My Plan. */
+@media screen {
+#mobileAuth.mobile-auth{background:radial-gradient(ellipse at 88% 0,#e9e5fb 0,transparent 42%),#f5f7fb!important;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(22px + env(safe-area-inset-bottom,0px))!important;align-items:center}
+#mobileAuth .nova-access-shell{width:min(100%,460px);display:grid;min-width:0}
+#mobileAuth .nova-access-story{display:none}
+#mobileAuth .auth-panel{width:100%!important;padding:24px!important;border-radius:24px!important;box-shadow:0 20px 55px #24345a0d!important}
+#mobileAuth .nova-access-brand{display:flex;align-items:center;gap:12px;margin:0 0 21px}
+#mobileAuth .nova-access-brand .nova-auth-logo{width:54px!important;height:54px!important;min-width:54px!important;min-height:54px!important;border-radius:15px!important;margin:0!important}
+#mobileAuth .nova-access-brand strong{display:block;color:#192b46;font-size:22px;font-weight:800;letter-spacing:-.05em;line-height:1.08}
+#mobileAuth .nova-access-brand small{display:block;margin-top:5px;font-size:10px;letter-spacing:.075em;color:#60718a;font-weight:700}
+#mobileAuth #novaAuthSubtitle{font-size:10px!important;letter-spacing:.12em!important;color:#6454bd!important}
+#mobileAuth h1{margin:7px 0 5px!important;font-size:clamp(27px,7vw,34px)!important;letter-spacing:-.045em!important}
+#mobileAuth .nova-access-description{margin:0 0 16px!important;font-size:14px!important}
+#mobileAuth .nova-access-offer{display:flex;align-items:center;gap:11px;background:#eef8f5;border:1px solid #d0e9e1;border-radius:13px;padding:12px;margin-bottom:19px;color:#155b4e}
+#mobileAuth .nova-access-offer-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;background:#dcefe9;border-radius:10px}
+#mobileAuth .nova-access-offer-icon svg{width:20px;height:20px}
+#mobileAuth .nova-access-offer strong{display:block;font-size:14px;line-height:1.3}
+#mobileAuth .nova-access-offer small{display:block;font-size:12px;margin-top:3px;line-height:1.35;color:#41675f}
+#mobileAuth .nova-access-form{display:grid;gap:12px!important;margin:0}
+#mobileAuth .nova-access-form label{font-weight:700!important;font-size:13px!important;gap:6px!important}
+#mobileAuth .nova-access-form input{margin:0!important;background:#fafbfe!important;border-color:#d5dce8!important;min-height:49px!important}
+#mobileAuth .nova-access-form input::placeholder{color:#718096;opacity:1;font-size:14px}
+#mobileAuth .nova-password-field{display:grid;gap:6px}
+#mobileAuth .nova-password-input{position:relative;min-width:0}
+#mobileAuth .nova-password-input input{padding-right:52px!important}
+#mobileAuth #novaLoginPanel #novaShowPassword{position:absolute;right:3px;top:2px;display:grid;place-items:center;width:44px!important;min-height:44px!important;margin:0!important;border:0!important;background:transparent!important;color:#5d6b81!important;padding:0!important}
+#mobileAuth #novaShowPassword[aria-pressed=true]{color:#5947c6!important}
+#mobileAuth #novaLoginPanel .nova-access-link{border:0!important;background:transparent!important;box-shadow:none!important;color:#5140b0!important;width:auto!important;min-height:44px!important;margin:0!important;padding:6px 0!important;text-align:right;font-size:13px!important;justify-self:end}
+#mobileAuth #novaLoginPanel .nova-access-resend{justify-self:center;text-align:center;color:#52617a!important}
+#mobileAuth #novaLoginPanel .nova-access-submit{margin:0!important;position:relative;font-size:16px!important;min-height:50px!important;border-radius:12px!important}
+#mobileAuth .nova-access-submit span{position:absolute;right:16px;font-size:20px}
+#mobileAuth .nova-access-separator{display:flex;align-items:center;gap:10px;color:#60718a;font-size:12px;font-weight:600;line-height:1.4;text-align:center}
+#mobileAuth .nova-access-separator::before,#mobileAuth .nova-access-separator::after{content:"";height:1px;background:#e1e7ef;flex:1}
+#mobileAuth #novaLoginPanel .nova-access-create{background:#fff!important;color:#5140b0!important;border:1px solid #b8adee!important;border-radius:12px!important;margin:0!important;min-height:48px!important;font-size:14px!important}
+#mobileAuth .nova-access-status{background:#f0f3f9;padding:10px 12px;border-radius:10px;margin:0!important;font-size:13px!important;overflow-wrap:anywhere}
+#mobileAuth .nova-access-status:empty{display:none!important}
+#mobileAuth .nova-access-footer{display:flex;align-items:center;justify-content:center;gap:6px;padding-top:11px;margin-top:3px;border-top:1px solid #e9edf4;color:#627189;font-size:11px;line-height:1.4;text-align:center}
+#mobileAuth .nova-access-footer svg{flex:0 0 15px}
+#mobileAuth .nova-access-form button:disabled{opacity:.55;cursor:wait}
+.nova-billing-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.nova-billing-options>div{display:grid;gap:2px;padding:13px;border:1px solid #dbe2ef;border-radius:13px;background:#f7f9fc;color:#172a46}
+.nova-billing-options strong{font-size:21px;letter-spacing:-.035em}
+.nova-billing-options span,.nova-billing-options small{font-size:12px;color:#596980}
+}
+@media screen and (max-width:360px){#mobileAuth.mobile-auth{padding-left:10px!important;padding-right:10px!important}#mobileAuth .auth-panel{padding:18px!important}#mobileAuth .nova-access-brand{gap:9px}#mobileAuth .nova-access-brand small{font-size:9px}}
+@media screen and (min-width:900px){
+#mobileAuth[data-stage=login] .nova-access-shell:has(#novaLoginPanel:not([hidden])){width:min(1080px,100%);grid-template-columns:1.05fr 1fr;border-radius:30px;background:#fff;box-shadow:0 30px 85px #172c5320;overflow:hidden}
+#mobileAuth[data-stage=login] .nova-access-story{display:flex;min-height:610px;flex-direction:column;justify-content:space-between;gap:26px;padding:48px 42px;background:radial-gradient(ellipse at 5% 94%,#5841b9 0,transparent 62%),linear-gradient(145deg,#12254a,#262552 60%,#2d2664);color:#fff}
+#mobileAuth[data-stage=login] .auth-panel{border:0!important;box-shadow:none!important;border-radius:0!important;padding:42px!important;align-self:center}
+#mobileAuth .nova-story-kicker{color:#d9d5ff;font-size:11px;letter-spacing:.12em;font-weight:700;display:flex;align-items:center;gap:8px}
+#mobileAuth .nova-story-dot{width:8px;height:8px;background:#68e0cf;border-radius:50%}
+#mobileAuth .nova-access-story h2{font-size:clamp(40px,4.7vw,64px);letter-spacing:-.065em;font-weight:800;line-height:1.01;margin:0 0 20px;color:#fff}
+#mobileAuth .nova-access-story p{color:#d9deef!important;font-size:17px!important;line-height:1.6!important;margin:0;max-width:370px}
+#mobileAuth .nova-story-features{display:grid;gap:17px}
+#mobileAuth .nova-story-features>div{display:flex;gap:13px;align-items:center}
+#mobileAuth .nova-story-features>div>span{font-size:22px;width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px;background:#ffffff12;border:1px solid #ffffff20;border-radius:12px;color:#bdf7ea}
+#mobileAuth .nova-story-features strong{display:block;font-size:15px;color:#fff}
+#mobileAuth .nova-story-features small{display:block;font-size:13px;line-height:1.4;margin-top:3px;color:#d9deef}
+#mobileAuth .nova-story-footer{color:#bcbfe2;font-size:12px;letter-spacing:.04em}
+}
