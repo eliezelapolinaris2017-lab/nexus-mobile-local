@@ -1,10 +1,8 @@
-const CFG='nexus-local-confirmations-config-v1';
-const validRef=s=>/^[a-z0-9]{20}$/.test(s);
-const validKey=s=>/^[a-f0-9]{64}$/.test(s);
+import {PROJECT_REF,cloudReady,confirmationRequest} from './cloud.js';
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
 const inactive=s=>['Completado','Completada','Cancelado','Cancelada','Facturado'].includes(s.status);
-function getConfig(){try{const c=JSON.parse(localStorage.getItem(CFG)||'null');return c&&validRef(c.ref)&&validKey(c.key)?c:null;}catch{return null;}}
-async function request(c,body){const r=await fetch('https://'+c.ref+'.supabase.co/functions/v1/nova-confirmations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,ownerKey:c.key}),cache:'no-store',signal:AbortSignal.timeout(12000)});const v=await r.json();if(!r.ok)throw Error(v.error||'No se pudo conectar');return v;}
+const getConfig=()=>cloudReady()?{ref:PROJECT_REF}:null;
+const request=(_cfg,body)=>confirmationRequest(body);
 export function appointmentMessage(s,c,profile,link){
  const day=new Date(s.date+'T12:00:00').toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
  const [h,m]=String(s.time||'').split(':').map(Number),time=s.time?((h%12)||12)+':'+String(m).padStart(2,'0')+(h>=12?' p. m.':' a. m.'):'Por coordinar';
@@ -12,16 +10,13 @@ export function appointmentMessage(s,c,profile,link){
 }
 export function createConfirmations({$,state,clientBy,phoneLink,statusBadge,docRef,updateDoc,serverTimestamp,showMobileNotice,render}){
  const dialog=$('confirmShareDialog'),anchor=$('confirmWhatsApp');let current=null,polling=false,preparing=false;
- const config=getConfig();if(config)$('confirmProject').value=config.ref;
- function configLabel(){const cfg=getConfig();$('confirmConfigStatus').textContent=cfg?'Conexión configurada. Las confirmaciones se consultan con internet.':'Sin conexión: enlaces de confirmación no disponibles. El mensaje de WhatsApp sí se puede preparar.';}
- configLabel();
- $('confirmConfigForm').addEventListener('submit',async e=>{e.preventDefault();const ref=$('confirmProject').value.trim(),key=$('confirmOwnerKey').value.trim();if(!validRef(ref)||!validKey(key)){showMobileNotice('Revisa la referencia y la clave privada de agenda.','danger');return;}try{await request({ref,key},{action:'ping'});const previous=getConfig();if(previous&&(previous.ref!==ref||previous.key!==key)&&state.services.some(s=>s.confirmationInvite&&!inactive(s)))throw Error('Hay enlaces vigentes; cancela o completa las citas antes de cambiar la conexión.');localStorage.setItem(CFG,JSON.stringify({ref,key}));$('confirmOwnerKey').value='';configLabel();showMobileNotice('Confirmaciones conectadas','ok');refresh();}catch(err){showMobileNotice(err.message,'danger');}});
- $('confirmDisconnect').onclick=()=>{if(state.services.some(s=>s.confirmationInvite&&!inactive(s))){showMobileNotice('Hay enlaces vigentes. Cancélalos antes de desconectar.','danger');return;}localStorage.removeItem(CFG);configLabel();};
+ function configLabel(){$('confirmConfigStatus').textContent=cloudReady()?'Activadas automáticamente con tu cuenta NOVA.':'Las confirmaciones se activan al iniciar sesión.';}
+ configLabel();window.addEventListener('nova-cloud-ready',()=>{configLabel();refresh();});
  async function patch(s,fields){await updateDoc(docRef('services',s.id),fields);state.services=state.services.map(r=>r.id===s.id?{...r,...fields}:r);}
  async function revoke(s){if(!s.confirmationInvite)return;const cfg=getConfig();if(!cfg||cfg.ref!==s.confirmationInvite.ref)throw Error('Conecta la nube original para invalidar el enlace anterior.');await request(cfg,{action:'revoke',id:s.confirmationInvite.id});}
  function badge(s){if(inactive(s))return '';const labels={confirmed:'Confirmada por cliente',pending:'Esperando confirmación',expired:'Enlace vencido','not-sent':'Sin enviar'};return '<div class="confirm-status '+(s.confirmationState==='confirmed'?'confirmed':'')+'">'+(labels[s.confirmationState]||'Sin enviar')+'</div>';}
  function paint(s,link,status){const c=clientBy(s.clientId),phone=phoneLink(c);$('confirmMessage').value=appointmentMessage(s,c,state.profile,link);$('confirmShareStatus').textContent=status+(phone?'':' El cliente no tiene teléfono registrado.');anchor.hidden=!phone;if(phone)anchor.href=phone+'?text='+encodeURIComponent($('confirmMessage').value);}
- async function prepare(){if(preparing||!current)return;const s=state.services.find(x=>x.id===current);if(!s||inactive(s))return;const cfg=getConfig();if(!cfg){paint(s,'','Mensaje preparado. Falta conectar Supabase para incluir el enlace automático.');return;}
+ async function prepare(){if(preparing||!current)return;const s=state.services.find(x=>x.id===current);if(!s||inactive(s))return;const cfg=getConfig();if(!cfg){paint(s,'','Mensaje preparado. Inicia sesión y conéctate a internet para incluir el enlace automático.');return;}
  if(s.confirmationState==='confirmed'){paint(s,'','Esta cita ya fue confirmada. Puedes enviar un recordatorio.');return;}
  preparing=true;$('confirmShareRetry').disabled=true;anchor.hidden=true;$('confirmShareStatus').textContent='Preparando enlace seguro…';
  try{let inv=s.confirmationInvite;

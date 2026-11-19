@@ -1,4 +1,4 @@
-import { setupCloud } from './cloud.js';
+import { setupCloud,finishOnboarding } from './cloud.js';
 import {getProfile,saveProfile,exportWorkspace,restoreWorkspace,onSnapshot,addDoc,updateDoc,serverTimestamp} from './local-db.js';
 export function setupStandalone({$,state,COLS,colRef,docRef,clientBy,today,switchTab,ensureLines,renderInvoiceLines,renderAll,renderSummary,calculateMobilePrice,setSync,showMobileNotice}){
 let unsub=[];
@@ -18,13 +18,13 @@ async function start(){
  if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
 }
 const setup=$('mobileAuthForm');setup.innerHTML=form('localSetup');$('mobileAuthMsg').textContent='Abriendo almacenamiento…';
-const setupBtn=setup.querySelector('button[type=submit]');setupBtn.disabled=true;
+const setupBtn=setup.querySelector('button[type=submit]');setupBtn.disabled=false;
 setup.addEventListener('input',()=>{setup.dataset.dirty='true';});
 setup.addEventListener('submit',async e=>{
  e.preventDefault();if(setupBtn.disabled)return;setupBtn.disabled=true;setupBtn.textContent='Guardando…';
- try{const p=await readProfile('localSetup');await saveProfile(p);await start();setup.dataset.dirty='false';$('mobileAuthMsg').textContent='';}
+ try{const p=await readProfile('localSetup');await saveProfile(p);await finishOnboarding();setup.dataset.dirty='false';$('mobileAuthMsg').textContent='';}
  catch(err){revealError(err);}
- finally{setupBtn.disabled=false;setupBtn.textContent='Guardar configuración';}
+ finally{setupBtn.disabled=false;setupBtn.textContent='Activar mi empresa';}
 });
 const settings=$('localSettingsForm');settings.innerHTML=form('localSettings');settings.addEventListener('submit',async e=>{e.preventDefault();try{await saveProfile(await readProfile('localSettings'));state.profile=await getProfile();$('mobileBusiness').textContent=state.profile.businessName;$('mCalcTax').value=String(state.profile.tax);calculateMobilePrice();renderSummary();showMobileNotice('Configuración guardada','ok');}catch(err){showMobileNotice(err.message,'danger');}});
 $('mobileLogout').addEventListener('click',()=>switchTab('mSync'));
@@ -32,6 +32,5 @@ $('localExport').addEventListener('click',async()=>{try{const backup=await expor
 $('localImport').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{if(!confirm('El respaldo reemplazará los datos locales. ¿Continuar?'))return;if(file.size>100*1024*1024)throw new Error('Respaldo demasiado grande');await restoreWorkspace(JSON.parse(await file.text()));location.reload();}catch(e){showMobileNotice(e.message,'danger');}finally{$('localImport').value='';}});
 $('localServiceDate').value=today();$('localServiceForm').addEventListener('submit',async e=>{e.preventDefault();const c=clientBy($('localServiceClient').value),title=$('localServiceTitle').value.trim();if(!c.id||!title)return;try{await addDoc(colRef('services'),{clientId:c.id,clientName:c.name,title,date:$('localServiceDate').value,time:$('localServiceTime').value,note:$('localServiceNote').value,status:'Programado',createdAt:serverTimestamp()});e.target.reset();$('localServiceDate').value=today();showMobileNotice('Trabajo guardado','ok');}catch(err){showMobileNotice(err.message,'danger');}});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-local-complete]');if(!b)return;if(!confirm('¿Marcar trabajo completado?'))return;try{await updateDoc(docRef('services',b.dataset.localComplete),{status:'Completado',updatedAt:serverTimestamp()});}catch(err){showMobileNotice(err.message,'danger');}});
-setupCloud();
-start().then(()=>{$('mobileAuthMsg').textContent='';setupBtn.disabled=false;}).catch(e=>{revealError(e);setupBtn.disabled=false;});
+setupBtn.textContent='Activar mi empresa';$('mobileAuthMsg').textContent='';setupCloud(start);
 }

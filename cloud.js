@@ -3,10 +3,47 @@ import {cloudSnapshot,acknowledgeCloud,applyCloudSnapshot} from './local-db.js';
 const BASE='https://cgpfpxueqciefclonghz.supabase.co';
 const API='sb_publishable_C80PjdtDeDfIT2z5EnUh5g_CiOUlUoG';
 const SESSION='nova-cloud-session-v1';
-const scope='./index.html';
+const LEGACY='nexus-local-confirmations-config-v1';
+export const PROJECT_REF='cgpfpxueqciefclonghz';
+let ready=false,openApp=null,transitioning=false;
+export const cloudReady=()=>ready&&!!session;
+export async function confirmationRequest(body){return request('/functions/v1/nova-confirmations',{method:'POST',access:await access(),body});}
+function legacyKey(){try{const c=JSON.parse(localStorage.getItem(LEGACY)||'null');return c?.ref===PROJECT_REF&&/^[a-f0-9]{64}$/.test(c.key)?c.key:null;}catch{return null;}}
+async function activateConfirmations(importLegacy=false){const key=importLegacy?legacyKey():null;await confirmationRequest({action:'provision',...(key?{legacyKey:key}:{})});if(key)localStorage.removeItem(LEGACY);}
+const el=id=>document.getElementById(id);
+function view(stage){el('mobileAuth').classList.toggle('hidden',stage==='app');el('mobileApp').classList.add('hidden');el('novaLoginPanel').hidden=stage!=='login';el('novaOnboarding').hidden=stage!=='onboarding';el('novaMigration').hidden=stage!=='migration';el('novaAuthTitle').textContent=stage==='onboarding'?'Configura tu empresa.':stage==='migration'?'Vincula tu negocio.':'Bienvenido a NOVA.';el('novaAuthSubtitle').textContent=stage==='onboarding'?'PASO 2 DE 2 · TU EMPRESA':stage==='migration'?'CONSERVA TUS DATOS':'PASO 1 DE 2 · TU CUENTA';}
+function message(s){el('mobileAuthMsg').textContent=s||'';}
+async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));}
+async function hydrate(){
+ if(!session||transitioning)return;transitioning=true;ready=false;
+ try{
+  const local=await assertOwner(),owner=session.user.id;
+  if(!navigator.onLine){if(local.binding?.owner===owner&&local.snapshot.profile){await enter();paint('Sin internet · guardado local.');return;}throw Error('Necesitas internet para vincular tu cuenta por primera vez.');}
+  const remote=await getRow(owner,true);
+  if(local.binding&&local.snapshot.profile){
+   if(!remote)throw Error('No se encontró tu base vinculada. No se reemplazaron tus datos.');
+   if(Number(remote.revision)!==local.binding.version&&local.revision===local.binding.syncedRevision)await applyCloudSnapshot(remote.snapshot,owner,Number(remote.revision),local.revision);
+   await activateConfirmations(true);await enter();message('');return;
+  }
+  if(local.snapshot.profile){view('migration');el('novaMigrationText').textContent=remote?'Existe una empresa en Supabase y otra copia en este teléfono. Recupera la nube después de exportar un respaldo.':'Encontramos tu empresa y datos en este dispositivo. Vincúlalos para conservarlos en Supabase.';el('novaMigrateLocal').hidden=!!remote;el('novaMigrateRemote').hidden=!remote;message('');return;}
+  if(remote){await applyCloudSnapshot(remote.snapshot,owner,Number(remote.revision),local.revision);await activateConfirmations(false);await enter();message('');return;}
+  view('onboarding');message('');
+ }catch(e){if(e.status===401||!session){saveSession(null);view('login');}else{view('migration');el('novaMigrationText').textContent='No se pudo vincular la cuenta. Tus registros no se han borrado.';el('novaMigrateLocal').hidden=true;el('novaMigrateRemote').hidden=true;}paint(e.message);message(e.message);}
+ finally{transitioning=false;}
+}
+export async function finishOnboarding(importLegacy=false){
+ if(!session||transitioning||busy)throw Error('Inicia sesión o termina la operación anterior.');
+ transitioning=true;
+ try{const local=await assertOwner(),owner=session.user.id;if(!local.snapshot.profile)throw Error('Completa los datos de tu empresa.');if(!navigator.onLine)throw Error('Conéctate a internet para guardar tu empresa.');
+ const existing=await getRow(owner);
+ if(existing){if(!local.binding||local.binding.owner!==owner)throw Error('Ya existe una empresa en la nube. Recupérala en lugar de reemplazarla.');}
+ else{await activateConfirmations(importLegacy);const result=await request('/rest/v1/nova_workspaces?select=revision,updated_at',{method:'POST',access:await access(),prefer:'return=representation',body:{owner_id:owner,snapshot:local.snapshot}});if(!result?.[0])throw Error('No se pudo verificar la primera copia.');await acknowledgeCloud(owner,0,Number(result[0].revision),local.revision);synced(result[0]);}
+ await activateConfirmations(importLegacy);await enter();message('');
+ }finally{transitioning=false;}
+}
 let session=null,busy=false,timer=null,refreshPromise=null,stopped=false;
 try{session=JSON.parse(sessionStorage.getItem(SESSION)||'null');}catch{}
-function saveSession(s){session=s;try{if(s)sessionStorage.setItem(SESSION,JSON.stringify(s));else sessionStorage.removeItem(SESSION);}catch{}}
+function saveSession(s){session=s;if(!s)ready=false;try{if(s)sessionStorage.setItem(SESSION,JSON.stringify(s));else sessionStorage.removeItem(SESSION);}catch{}}
 async function request(path,{method='GET',body,access,prefer}={}){
  const headers={apikey:API,'Content-Type':'application/json'};
  if(access)headers.Authorization='Bearer '+access;
@@ -20,7 +57,7 @@ function useSession(s){if(!s?.access_token||!s?.refresh_token||!s?.user?.id)thro
 async function access(){
  if(!session)throw Error('Inicia sesión en NOVA.');
  if(session.expires_at>Date.now()/1000+90)return session.access_token;
- if(!refreshPromise){refreshPromise=request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:session.refresh_token}}).then(s=>{useSession(s);return session.access_token;}).catch(e=>{if(e.status===400||e.status===401)saveSession(null);throw e;}).finally(()=>refreshPromise=null);}
+ if(!refreshPromise){refreshPromise=request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:session.refresh_token}}).then(s=>{useSession(s);return session.access_token;}).catch(e=>{if(e.status===400||e.status===401){saveSession(null);location.reload();}throw e;}).finally(()=>refreshPromise=null);}
  return refreshPromise;
 }
 function paint(msg){document.querySelectorAll('[data-cloud-status]').forEach(e=>e.textContent=msg);document.querySelectorAll('[data-cloud-login]').forEach(e=>e.hidden=!!session);document.querySelectorAll('[data-cloud-actions]').forEach(e=>e.hidden=!session);}
@@ -29,7 +66,7 @@ async function getRow(owner,full=false){const rows=await request(rowPath(owner)+
 async function assertOwner(){const local=await cloudSnapshot();if(local.binding&&local.binding.owner!==session.user.id)throw Error('Este dispositivo está vinculado a otra cuenta. No se subirán ni reemplazarán datos.');return local;}
 function synced(r){paint('☁ Guardado en Supabase · '+(r?.updated_at?new Date(r.updated_at).toLocaleString('es-PR'):'ahora'));}
 async function sync({initial=false}={}){
- if(!session||busy||stopped)return;
+ if(!session||!ready||busy||stopped||transitioning)return;
  if(!navigator.onLine){paint('Sin internet · cambios guardados en este dispositivo.');return;}
  busy=true;
  try{
@@ -77,20 +114,20 @@ async function authenticate(email,password,signup){
   if(local.binding&&local.binding.owner!==session.user.id){saveSession(null);paint('Este dispositivo pertenece a otra cuenta. No se movieron datos.');return;}
   paint('Sesión iniciada. Consultando Supabase…');
  }catch(e){paint('No se pudo iniciar sesión: '+e.message);}
- finally{busy=false;if(session)sync();}
+ finally{busy=false;if(session){await hydrate();if(ready)sync();}}
 }
+async function logout(){if(busy||transitioning)return;if(!confirm('¿Cerrar sesión? Los registros locales se conservarán.'))return;stopped=true;ready=false;try{if(session)await request('/auth/v1/logout',{method:'POST',access:await access()});}catch{}finally{saveSession(null);location.reload();}}
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>sync(),1600);}
-export function setupCloud(){
+export function setupCloud(onOpen){openApp=onOpen;view('login');
  document.querySelectorAll('[data-cloud-form]').forEach(form=>{
   form.addEventListener('submit',e=>{e.preventDefault();const email=form.querySelector('[name=email]').value.trim(),password=form.querySelector('[name=password]').value,signup=e.submitter?.dataset.mode==='signup';if(password.length<8){paint('La contraseña debe tener al menos 8 caracteres.');return;}form.querySelector('[name=password]').value='';authenticate(email,password,signup);});
  });
  document.querySelectorAll('[data-cloud-push]').forEach(b=>b.addEventListener('click',()=>sync({initial:true})));
  document.querySelectorAll('[data-cloud-pull]').forEach(b=>b.addEventListener('click',recover));
- document.querySelectorAll('[data-cloud-logout]').forEach(b=>b.addEventListener('click',async()=>{
-  if(busy)return;if(!confirm('¿Cerrar la sesión de nube? Los datos locales permanecerán en este dispositivo.'))return;
-  stopped=true;try{if(session)await request('/auth/v1/logout',{method:'POST',access:await access()});}catch{}finally{saveSession(null);stopped=false;paint('Sesión cerrada. Los registros locales se conservan.');}
- }));
+ document.querySelectorAll('[data-cloud-logout],[data-cloud-exit]').forEach(b=>b.addEventListener('click',logout));
+ el('novaMigrateLocal').addEventListener('click',async()=>{if(!confirm('¿Vincular los datos de este dispositivo a tu cuenta NOVA? Se conservarán los registros y enlaces anteriores.'))return;try{await finishOnboarding(true);}catch(e){message(e.message);}});
+ el('novaMigrateRemote').addEventListener('click',recover);el('novaRetryAccount').addEventListener('click',hydrate);
  window.addEventListener('nova-local-change',schedule);window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
  window.addEventListener('focus',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});setInterval(()=>{if(!document.hidden)sync();},30000);
- paint(session?'Consultando Supabase…':'Modo local. Inicia sesión para guardar todos tus datos en la nube.');sync();
+ paint(session?'Consultando Supabase…':'Inicia sesión o crea tu cuenta privada.');if(session)hydrate();
 }

@@ -1,5 +1,5 @@
 const origin="https://eliezelapolinaris2017-lab.github.io";
-const cors={"Access-Control-Allow-Origin":origin,"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"content-type","Content-Type":"application/json","Cache-Control":"no-store"};
+const cors={"Access-Control-Allow-Origin":origin,"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"content-type,authorization,apikey","Content-Type":"application/json","Cache-Control":"no-store"};
 const out=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const hex=(v:unknown)=>typeof v==="string"&&/^[a-f0-9]{64}$/.test(v);
 const uuid=(v:unknown)=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v);
@@ -11,7 +11,41 @@ Deno.serve(async(req)=>{
  if(req.headers.get("origin")!==origin)return out({error:"Origen no autorizado"},403);
  try{const raw=await req.text();if(raw.length>16000)return out({error:"Solicitud demasiado grande"},413);const b=JSON.parse(raw);const now=new Date().toISOString();
  if(b.action==="confirm"){if(!hex(b.token))return out({error:"Enlace inválido"},400);const token=await hash(b.token);const filter="token_hash=eq."+token+"&revoked=eq.false&expires_at=gt."+encodeURIComponent(now);const updated=await rest(table,filter+"&confirmed_at=is.null","PATCH",{confirmed_at:now});if(updated.length)return out({state:"confirmed"});const existing=await rest(table,filter+"&select=confirmed_at");if(existing[0]?.confirmed_at)return out({state:"confirmed"});return out({error:"Enlace vencido, cancelado o inválido. Comunícate con tu proveedor."},410);}
- if(!hex(b.ownerKey))return out({error:"Conexión no autorizada"},401);const owner=await hash(b.ownerKey),auth=await rest(owners,"key_hash=eq."+owner+"&active=eq.true&select=key_hash");if(!auth.length)return out({error:"Conexión no autorizada"},401);
+ let owner:string;
+ const authorization=req.headers.get("authorization");
+ if(authorization){
+  const key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if(!key)return out({error:"Servicio no configurado"},503);
+  const response=await fetch(Deno.env.get("SUPABASE_URL")+"/auth/v1/user",{headers:{apikey:key,Authorization:authorization}});
+  if(!response.ok)return out({error:"Inicia sesión nuevamente"},401);
+  const user=await response.json();
+  if(!uuid(user.id)||!user.email_confirmed_at)return out({error:"Verifica tu correo"},401);
+  const ownFilter="owner_id=eq."+user.id+"&active=eq.true";
+  let owned=await rest(owners,ownFilter+"&select=key_hash");
+  if(b.action==="provision"&&b.legacyKey){
+    if(!hex(b.legacyKey))return out({error:"Conexión anterior inválida"},400);
+    const legacy=await hash(b.legacyKey);
+    if(owned.length&&owned[0].key_hash!==legacy)return out({error:"Esta cuenta ya tiene otra conexión de confirmaciones. No se cambiaron enlaces."},409);
+    if(!owned.length){
+      const claimed=await rest(owners,"key_hash=eq."+legacy+"&owner_id=is.null&active=eq.true","PATCH",{owner_id:user.id});
+      if(!claimed.length)return out({error:"No se pudo asociar la conexión anterior. No se cambiaron enlaces."},409);
+      owned=claimed;
+    }
+  }
+  if(!owned.length){
+    const newHash=await hash("nova-account:"+user.id);
+    try{await rest(owners,"","POST",{key_hash:newHash,owner_id:user.id,active:true});}catch{}
+    owned=await rest(owners,ownFilter+"&select=key_hash");
+  }
+  if(!owned.length)return out({error:"No se pudo activar la cuenta"},503);
+  owner=owned[0].key_hash;
+  if(b.action==="provision")return out({ok:true});
+ }else{
+  if(!hex(b.ownerKey))return out({error:"Conexión no autorizada"},401);
+  owner=await hash(b.ownerKey);
+  const auth=await rest(owners,"key_hash=eq."+owner+"&active=eq.true&owner_id=is.null&select=key_hash");
+  if(!auth.length)return out({error:"Inicia sesión en NOVA para gestionar tus citas"},401);
+ }
  const scope="owner_hash=eq."+owner;
  if(b.action==="ping")return out({ok:true});
  if(b.action==="create"){if(!uuid(b.id)||!hex(b.token)||typeof b.expires!=="string")return out({error:"Solicitud inválida"},400);const expiration=Date.parse(b.expires);if(!Number.isFinite(expiration)||expiration<=Date.now()||expiration>Date.now()+366*86400000)return out({error:"Fecha de cita no disponible"},400);await rest(table,"","POST",{id:b.id,owner_hash:owner,token_hash:await hash(b.token),expires_at:new Date(expiration).toISOString()});return out({ok:true});}
