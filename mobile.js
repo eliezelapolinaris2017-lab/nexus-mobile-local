@@ -3,7 +3,7 @@ import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
-const APP_VERSION = 'Local 2.1';
+const APP_VERSION = 'Local 2.2';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -104,7 +104,7 @@ function switchTab(id){
   document.querySelectorAll('.mobile-view').forEach(v => v.classList.toggle('active', v.id === id));
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   viewMemory.recall();
-  if(id==='mAgenda')agenda.render();
+  if(id==='mAgenda'){agenda.render();agenda.refreshConfirmations();}
 }
 
 document.addEventListener('click', async e => {

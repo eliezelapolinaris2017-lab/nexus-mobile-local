@@ -18,3 +18,6 @@ Nueva capa visual móvil: panel de cobros, tarjetas de acceso, navegación renov
 
 ## Agenda 2.1
 Calendario mensual, citas por fecha, creación y edición local de horarios, advertencia de solapamientos, clientes, estados, facturación y rutas. Las citas son trabajos de la misma colección local; no hay sincronización con calendarios externos.
+
+## Confirmaciones 2.2 (pendiente de nube nueva)
+WhatsApp abre un mensaje relleno; el operador pulsa Enviar. La página confirmar.html registra el clic mediante una Edge Function. El dueño consulta estados al abrir la agenda y cada 30 s mientras la app esté abierta. No se guardan datos identificativos del cliente en la nube; solo tokens cifrados por hash y estado. Requiere un proyecto Supabase independiente, aplicar setup-confirmations.sql, desplegar nova-confirmations con verify_jwt=false (autenticación por clave de propietario y token individual), provisionar una clave privada y configurarla en la app. No usar service_role como clave de propietario. No hay conexión activa todavía. Los enlaces se invalidan antes de cambios o cancelaciones desde la agenda; requiere internet si hay un enlace vigente. GitHub Pages comparte origen con otros sitios del mismo usuario, usar origen exclusivo antes de datos reales. La clave local no se incluye en respaldos.

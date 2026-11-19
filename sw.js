@@ -1,6 +1,6 @@
-const CACHE='nexus-mobile-local-v2.1';
-const ASSETS=['./index.html','./mobile.js','./mobile.css','./mobile-field.css','./nova.css','./agenda.css','./agenda.js','./standalone-ui.js','./local-db.js','./client-search.js','./ui-context.js','./vendor/jspdf.umd.min.js','./manifest.webmanifest','./icon.svg'];
+const CACHE='nexus-mobile-local-v2.2';
+const ASSETS=['./index.html','./mobile.js','./mobile.css','./mobile-field.css','./nova.css','./agenda.css','./agenda.js','./confirmations.js','./confirmations.css','./confirmar.html','./confirm-page.js','./standalone-ui.js','./local-db.js','./client-search.js','./ui-context.js','./vendor/jspdf.umd.min.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{for(const k of await caches.keys())if(k.startsWith('nexus-mobile-local-')&&k!==CACHE)await caches.delete(k);await self.clients.claim();})()));
 self.addEventListener('message',e=>{if(e.data?.type==='SKIP_WAITING')self.skipWaiting();});
-self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET'||new URL(r.url).origin!==self.location.origin||!r.url.startsWith(self.registration.scope))return;if(r.mode==='navigate'){e.respondWith(caches.open(CACHE).then(c=>c.match('./index.html')).then(v=>v||fetch(r)));return;}e.respondWith(caches.open(CACHE).then(c=>c.match(r)).then(v=>v||fetch(r)));});
+self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET'||new URL(r.url).origin!==self.location.origin||!r.url.startsWith(self.registration.scope))return;if(r.mode==='navigate'){e.respondWith(caches.open(CACHE).then(c=>c.match(new URL(r.url).pathname.endsWith('/confirmar.html')?'./confirmar.html':'./index.html')).then(v=>v||fetch(r)));return;}e.respondWith(caches.open(CACHE).then(c=>c.match(r)).then(v=>v||fetch(r)));});
