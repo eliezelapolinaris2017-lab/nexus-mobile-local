@@ -46,7 +46,7 @@ export function alertMessage(a,business,money){
  if(a.category==='seguimientos')return hello+'Queríamos dar seguimiento a '+a.detail+'. ¿Te gustaría que coordinemos una fecha? Quedamos a tu disposición.';
  return hello+'Según nuestro registro, tu último servicio fue en '+new Date(a.date+'T12:00:00').toLocaleDateString('es-PR',{month:'long',year:'numeric'})+'. Quería saber cómo está funcionando tu equipo. Si deseas coordinar un servicio o mantenimiento, podemos ayudarte con una fecha.';
 }
-export function createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc}){
+export function createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc,openConfirmation}){
  let category='all',rows=[],working=new Set();
  const settings=()=>({day:today(),invoiceBalance,invoiceStatus,inactiveDays:180});
  function render(){
@@ -59,7 +59,7 @@ export function createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,mo
   const list=rows.filter(r=>category==='all'||r.category===category);
   $('novaAlertsList').innerHTML=list.length?list.map(a=>{
     const digits=phoneDigits(a.phone),key=a.source+':'+a.id+':'+a.key;
-    const action=a.category==='agenda'&&a.pending?'<button type="button" data-agenda-share="'+esc(a.id)+'">Enviar confirmación</button>':digits?'<a target="_blank" rel="noopener noreferrer" href="https://wa.me/'+digits+'?text='+encodeURIComponent(alertMessage(a,state.profile.businessName,money))+'">Preparar WhatsApp</a>':'<span class="nova-alert-muted">Sin teléfono</span>';
+    const action=a.category==='agenda'&&a.pending?'<button type="button" data-alert-share="'+esc(a.id)+'">Enviar confirmación</button>':digits?'<a target="_blank" rel="noopener noreferrer" href="https://wa.me/'+digits+'?text='+encodeURIComponent(alertMessage(a,state.profile.businessName,money))+'">Preparar WhatsApp</a>':'<span class="nova-alert-muted">Sin teléfono</span>';
     const route={services:'mAgenda',invoices:'mReceivable',followups:'mFollowups',clients:'mClients'}[a.source];
     return '<article class="nova-alert-card"><div class="nova-alert-row"><span class="nova-alert-symbol '+esc(a.category)+'">'+({agenda:'◷',cobros:'$',seguimientos:'↗',clientes:'+'}[a.category])+'</span><div><small>'+esc(a.category==='cobros'?'COBROS':a.category==='agenda'?'AGENDA':a.category==='clientes'?'CLIENTES':'SEGUIMIENTOS')+'</small><h4>'+esc(a.title)+'</h4><p>'+esc(a.clientName)+'</p></div></div><p class="nova-alert-detail">'+esc(a.detail)+(a.category==='cobros'?' · '+esc(money(a.balance)):'')+'</p><small>'+esc(localDate(a.date))+'</small><div class="nova-alert-actions">'+action+'<button data-tab="'+route+'" type="button">Ver módulo</button><button type="button" data-alert-snooze="'+esc(key)+'" '+(working.has(key)?'disabled':'')+'>Posponer</button></div></article>';
   }).join(''):'<div class="empty">No hay avisos en esta categoría.</div>';
@@ -68,7 +68,7 @@ export function createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,mo
  document.querySelectorAll('[data-alert-filter]').forEach(b=>b.addEventListener('click',()=>{category=b.dataset.alertFilter;render();}));
  $('novaAlertRefresh').addEventListener('click',render);
  document.addEventListener('click',async e=>{
-  const btn=e.target.closest('[data-alert-snooze]');if(!btn)return;
+  const share=e.target.closest('[data-alert-share]');if(share){openConfirmation(share.dataset.alertShare);return;}const btn=e.target.closest('[data-alert-snooze]');if(!btn)return;
   const key=btn.dataset.alertSnooze,r=rows.find(a=>a.source+':'+a.id+':'+a.key===key);
   if(!r||working.has(key))return;
   const record=state[r.source].find(x=>x.id===r.id);if(!record)return;

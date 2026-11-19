@@ -4,7 +4,7 @@ import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,ne
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
-const APP_VERSION = 'NOVA 2.5';
+const APP_VERSION = 'NOVA 2.5.1';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -984,7 +984,7 @@ document.addEventListener('click',e=>{
   const history=e.target.closest('[data-client-history]');if(history){$('mHistorySearch').value=clientBy(history.dataset.clientHistory).name||'';renderHistory();switchTab('mHistory');}
 });
 const agenda=createAgenda({$,state,clientBy,today,esc,phoneLink,statusBadge,colRef,docRef,addDoc,updateDoc,serverTimestamp,switchTab,showMobileNotice});
-const alertCenter=createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc});
+const alertCenter=createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc,openConfirmation:id=>{switchTab('mAgenda');agenda.share(id);}});
 function renderMobileTools(){
   agenda.render();
   const q=normalizeClientSearch($('mReceivableSearch').value);
