@@ -4,7 +4,8 @@ import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,ne
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
-const APP_VERSION = 'NOVA 2.5.1';
+import { createFinance } from './finance.js';
+const APP_VERSION = 'NOVA 3.0';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -26,8 +27,8 @@ const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + Number(n |
 const plusMonths = (date, months = 6) => { const d = new Date((date || today()) + 'T12:00:00'); d.setMonth(d.getMonth() + Number(months || 6)); return localDate(d); };
 
 let unsub = [];
-let state = { profile:null, clients:[], services:[], quotes:[], followups:[], invoices:[], payments:[], assets:[], contracts:[] };
-const COLS = ['clients', 'services', 'quotes', 'followups', 'invoices', 'payments', 'assets', 'contracts'];
+let state = { profile:null, clients:[], services:[], quotes:[], followups:[], invoices:[], payments:[], assets:[], contracts:[], expenses:[], suppliers:[], purchases:[], purchasePayments:[], inventory:[], stockUsage:[] };
+const COLS = ['clients', 'services', 'quotes', 'followups', 'invoices', 'payments', 'assets', 'contracts','expenses','suppliers','purchases','purchasePayments','inventory','stockUsage'];
 function uid(){ return 'local'; }
 function colRef(c){ return collection(db, 'users', uid(), c); }
 function docRef(c, id){ return doc(db, 'users', uid(), c, id); }
@@ -96,16 +97,16 @@ let documentOrigin=null;
 function switchTab(id){
   if (!document.getElementById(id)?.classList.contains('mobile-view')) return;
   viewMemory.save();
-  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio',mAlerts:'Centro de notificaciones'};
+  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio',mAlerts:'Centro de notificaciones',mFinance:'Control financiero'};
   document.querySelector('.mobile-top p').textContent = titles[id] || 'Nexus Mobile Local';
   document.querySelectorAll('.mobile-tabs button').forEach(b => {
-    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator','mAlerts'].includes(id));
+    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator','mAlerts','mFinance'].includes(id));
     b.setAttribute('aria-current', selected ? 'page' : 'false');
   });
   document.querySelectorAll('.mobile-view').forEach(v => v.classList.toggle('active', v.id === id));
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   viewMemory.recall();
-  if(id==='mAgenda'){agenda.render();agenda.refreshConfirmations();}if(id==='mAlerts')alertCenter.render();
+  if(id==='mAgenda'){agenda.render();agenda.refreshConfirmations();}if(id==='mAlerts')alertCenter.render();if(id==='mFinance')finance.render();
 }
 
 document.addEventListener('click', async e => {
@@ -216,7 +217,7 @@ async function saveMobileFollowup(e){
 
 setupPwaInstall();
 function renderAll(){return viewMemory.preserve(()=>renderAllContent());}
-function renderAllContent(){ renderServices(); renderSelects(); renderDashboard(); renderInvoices(); renderFollowups(); renderClients(); renderHistory(); renderSyncDetails(); renderSummary(); renderMobileTools(); alertCenter.render(); }
+function renderAllContent(){ renderServices(); renderSelects(); renderDashboard(); renderInvoices(); renderFollowups(); renderClients(); renderHistory(); renderSyncDetails(); renderSummary(); renderMobileTools(); alertCenter.render(); finance.render(); }
 function renderSelects(){
   const opts = state.clients.map(c => `<option value="${esc(c.id)}">${esc(c.name || 'Cliente')}</option>`).join('');
   ['mInvClient', 'mFollowClient'].forEach(id => { const el = $(id); if(el){ const prev = el.value; el.innerHTML = `<option value="">Seleccionar cliente</option>${opts}`; if(prev) el.value = prev; } });
@@ -985,6 +986,7 @@ document.addEventListener('click',e=>{
 });
 const agenda=createAgenda({$,state,clientBy,today,esc,phoneLink,statusBadge,colRef,docRef,addDoc,updateDoc,serverTimestamp,switchTab,showMobileNotice});
 const alertCenter=createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc,openConfirmation:id=>{switchTab('mAgenda');agenda.share(id);}});
+const finance=createFinance({$,state,today,money,esc,colRef,docRef,addDoc,updateDoc,showMobileNotice});
 function renderMobileTools(){
   agenda.render();
   const q=normalizeClientSearch($('mReceivableSearch').value);
