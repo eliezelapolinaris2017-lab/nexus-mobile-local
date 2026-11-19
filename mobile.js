@@ -5,7 +5,7 @@ import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
 import { createFinance } from './finance.js';
-const APP_VERSION = 'NOVA 3.0';
+const APP_VERSION = 'NOVA 3.0.1';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';

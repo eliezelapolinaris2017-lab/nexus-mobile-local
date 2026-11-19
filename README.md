@@ -36,3 +36,5 @@ Centro de avisos calculados desde registros locales: citas hoy/mañana, facturas
 
 ## Nova Cloud 3.0 Finanzas
 Colecciones nuevas compatibles con respaldos anteriores: expenses, suppliers, purchases, purchasePayments, inventory, stockUsage. Flujo de caja por fecha real de cobro/pago; IVU estimado proporcional al cobro acumulado; margen por factura basado en costos asignados. Las compras de inventario incrementan existencias y el consumo vinculado a factura las descuenta. No es contabilidad fiscal, no calcula utilidad neta contable, no cobra impuestos automáticamente. Fotos JPEG comprimidas en registros; el límite de tamaño de snapshot de Supabase aplica. Exportar PDF semanal, mensual o anual a la fecha. No se automatizan compras ni ajustes de inventario sin acción del usuario. No usar versiones antiguas para recuperar datos después de migrar.
+
+3.0.1: protección de tamaño de recibos y pruebas del flujo financiero con servidor simulado; las pruebas nunca deben llamar al proyecto productivo.
