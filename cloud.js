@@ -4,7 +4,7 @@ const BASE='https://cgpfpxueqciefclonghz.supabase.co';
 const API='sb_publishable_C80PjdtDeDfIT2z5EnUh5g_CiOUlUoG';
 const SESSION='nova-cloud-session-v1';
 const AUTH_RETURN='https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/';
-let nextSignupAt=0,authWorking=false;
+let nextSignupAt=0,nextRecoveryAt=0,authWorking=false,recoveryToken=null;
 function authError(e){
  const code=e.code||'';
  if(e.status===429||code==='over_email_send_rate_limit'||code==='over_request_rate_limit')return 'Supabase ha limitado temporalmente los envíos de correo. No crees otra cuenta. Usa el enlace de verificación que ya recibiste y luego inicia sesión; si no llegó, vuelve a intentar más tarde.';
@@ -23,7 +23,7 @@ export async function confirmationRequest(body){return request('/functions/v1/no
 function legacyKey(){try{const c=JSON.parse(localStorage.getItem(LEGACY)||'null');return c?.ref===PROJECT_REF&&/^[a-f0-9]{64}$/.test(c.key)?c.key:null;}catch{return null;}}
 async function activateConfirmations(importLegacy=false){const key=importLegacy?legacyKey():null;await confirmationRequest({action:'provision',...(key?{legacyKey:key}:{})});if(key)localStorage.removeItem(LEGACY);}
 const el=id=>document.getElementById(id);
-function view(stage){el('mobileAuth').classList.toggle('hidden',stage==='app');el('mobileApp').classList.add('hidden');el('novaLoginPanel').hidden=stage!=='login';el('novaOnboarding').hidden=stage!=='onboarding';el('novaMigration').hidden=stage!=='migration';el('novaAuthTitle').textContent=stage==='onboarding'?'Configura tu empresa.':stage==='migration'?'Vincula tu negocio.':'Bienvenido a NOVA.';el('novaAuthSubtitle').textContent=stage==='onboarding'?'PASO 2 DE 2 · TU EMPRESA':stage==='migration'?'CONSERVA TUS DATOS':'PASO 1 DE 2 · TU CUENTA';}
+function view(stage){el('mobileAuth').classList.toggle('hidden',stage==='app');el('mobileApp').classList.add('hidden');el('novaLoginPanel').hidden=stage!=='login';el('novaOnboarding').hidden=stage!=='onboarding';el('novaMigration').hidden=stage!=='migration';el('novaPasswordReset').hidden=stage!=='reset';el('novaAuthTitle').textContent=stage==='reset'?'Recupera tu acceso.':stage==='onboarding'?'Configura tu empresa.':stage==='migration'?'Vincula tu negocio.':'Bienvenido a NOVA.';el('novaAuthSubtitle').textContent=stage==='reset'?'SEGURIDAD DE CUENTA':stage==='onboarding'?'PASO 2 DE 2 · TU EMPRESA':stage==='migration'?'CONSERVA TUS DATOS':'PASO 1 DE 2 · TU CUENTA';}
 function message(s){el('mobileAuthMsg').textContent=s||'';}
 async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));schedule();}
 async function hydrate(){
@@ -139,6 +139,41 @@ async function authenticate(email,password,signup){
  }catch(e){paint(authError(e));}
  finally{busy=false;authControls(false);if(session){await hydrate();if(ready)sync();}}
 }
+async function requestReset(){
+ if(authWorking||busy||transitioning)return;
+ const email=el('novaLoginPanel').querySelector('[name=email]');
+ if(!email.reportValidity())return;
+ if(Date.now()<nextRecoveryAt){paint('Ya solicitaste un enlace. Revisa el correo y la carpeta de spam.');return;}
+ authControls(true);el('novaForgotPassword').disabled=true;nextRecoveryAt=Date.now()+60000;
+ try{await request('/auth/v1/recover?redirect_to='+encodeURIComponent(AUTH_RETURN),{method:'POST',body:{email:email.value.trim()}});paint('Si tu cuenta existe y está habilitada, recibirás un correo para crear una contraseña nueva. Abre el enlace en este navegador.');}
+ catch(e){paint(authError(e));}
+ finally{authControls(false);el('novaForgotPassword').disabled=false;}
+}
+async function resetPassword(e){
+ e.preventDefault();if(!recoveryToken||authWorking)return;
+ const pass=el('novaNewPassword').value,repeat=el('novaRepeatPassword').value;
+ if(pass.length<8||pass!==repeat){message('Las contraseñas deben coincidir y tener al menos ocho caracteres.');return;}
+ authControls(true);el('novaResetForm').querySelector('button').disabled=true;
+ try{await request('/auth/v1/user',{method:'PUT',access:recoveryToken,body:{password:pass}});await request('/auth/v1/logout',{method:'POST',access:recoveryToken}).catch(()=>{});recoveryToken=null;saveSession(null);el('novaResetForm').reset();view('login');message('Contraseña actualizada. Inicia sesión con tu nueva contraseña.');paint('Accede a tu cuenta.');}
+ catch(e){message(authError(e));}
+ finally{authControls(false);el('novaResetForm').querySelector('button').disabled=false;}
+}
+async function listBackups(){
+ const box=el('novaBackupList');box.textContent='Consultando…';
+ try{if(!cloudReady())throw Error('Inicia sesión y vincula tu empresa.');
+ const user=session.user.id;
+ const data=await request('/rest/v1/nova_workspace_backups?owner_id=eq.'+encodeURIComponent(user)+'&select=backup_day,revision,created_at&order=backup_day.desc',{access:await access()});
+ box.replaceChildren();
+ if(!data?.length){box.textContent='Todavía no hay respaldos registrados.';return;}
+ for(const row of data){const b=document.createElement('button');b.type='button';b.textContent='Descargar copia · '+row.backup_day+' · v'+row.revision;b.addEventListener('click',async()=>{
+  b.disabled=true;
+  try{const found=await request('/rest/v1/nova_workspace_backups?owner_id=eq.'+encodeURIComponent(user)+'&backup_day=eq.'+encodeURIComponent(row.backup_day)+'&select=snapshot',{access:await access()});
+  if(!found?.[0]?.snapshot)throw Error('No se encontró la copia.');
+  const blob=new Blob([JSON.stringify(found[0].snapshot,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='nova-respaldo-'+row.backup_day+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }catch(e){box.append(document.createTextNode(e.message));}finally{b.disabled=false;}
+ });box.append(b);}
+ }catch(e){box.textContent=e.message;}
+}
 async function logout(){if(busy||transitioning)return;if(!confirm('¿Cerrar sesión? Los registros locales se conservarán.'))return;stopped=true;ready=false;try{if(session)await request('/auth/v1/logout',{method:'POST',access:await access()});}catch{}finally{saveSession(null);location.reload();}}
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>sync(),500);}
 export function setupCloud(onOpen){openApp=onOpen;view('login');
@@ -147,6 +182,8 @@ export function setupCloud(onOpen){openApp=onOpen;view('login');
  const fragment=new URLSearchParams(location.hash.slice(1));
  const returned=fragment.has('access_token')||fragment.has('error')||fragment.has('error_code');
  const returnedError=fragment.has('error')||fragment.has('error_code');
+ const recovery=fragment.get('type')==='recovery'&&!returnedError&&fragment.get('access_token');
+ if(recovery){recoveryToken=recovery;saveSession(null);}
  if(returned)history.replaceState(null,'',location.pathname+location.search);
  document.querySelectorAll('[data-cloud-form]').forEach(form=>{
   form.addEventListener('submit',e=>{e.preventDefault();const email=form.querySelector('[name=email]').value.trim(),password=form.querySelector('[name=password]').value,signup=e.submitter?.dataset.mode==='signup';if(password.length<8){paint('La contraseña debe tener al menos 8 caracteres.');return;}form.querySelector('[name=password]').value='';authenticate(email,password,signup);});
@@ -156,7 +193,9 @@ export function setupCloud(onOpen){openApp=onOpen;view('login');
  document.querySelectorAll('[data-cloud-logout],[data-cloud-exit]').forEach(b=>b.addEventListener('click',logout));
  el('novaMigrateLocal').addEventListener('click',async()=>{if(!confirm('¿Vincular los datos de este dispositivo a tu cuenta NOVA? Se conservarán los registros y enlaces anteriores.'))return;try{await finishOnboarding(true);}catch(e){message(e.message);}});
  el('novaMigrateRemote').addEventListener('click',recover);el('novaRetryAccount').addEventListener('click',hydrate);
+ el('novaForgotPassword').addEventListener('click',requestReset);el('novaResetForm').addEventListener('submit',resetPassword);el('novaCancelReset').addEventListener('click',()=>{recoveryToken=null;el('novaResetForm').reset();view('login');message('');});el('novaLoadBackups').addEventListener('click',listBackups);
  window.addEventListener('nova-local-change',()=>{if(ready)paint(navigator.onLine?'Guardando cambios en Supabase…':'Sin internet · guardado local.');schedule();});window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
  window.addEventListener('focus',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});setInterval(()=>{if(!document.hidden)sync();},30000);
+ if(recoveryToken){view('reset');message('Introduce tu contraseña nueva.');return;}
  paint(session?'Consultando Supabase…':returned?(returnedError?'El enlace de verificación no pudo completarse. Regresa a tu correo o inicia sesión si ya lo verificaste.':'Regresaste de la verificación. Inicia sesión con tu correo y contraseña.'):'Inicia sesión o crea tu cuenta privada.');if(session)hydrate();
 }

@@ -3,7 +3,8 @@ import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
-const APP_VERSION = 'NOVA 2.4.2';
+import { createAlertCenter } from './alerts.js';
+const APP_VERSION = 'NOVA 2.5';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -95,16 +96,16 @@ let documentOrigin=null;
 function switchTab(id){
   if (!document.getElementById(id)?.classList.contains('mobile-view')) return;
   viewMemory.save();
-  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio'};
+  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio',mAlerts:'Centro de notificaciones'};
   document.querySelector('.mobile-top p').textContent = titles[id] || 'Nexus Mobile Local';
   document.querySelectorAll('.mobile-tabs button').forEach(b => {
-    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator'].includes(id));
+    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator','mAlerts'].includes(id));
     b.setAttribute('aria-current', selected ? 'page' : 'false');
   });
   document.querySelectorAll('.mobile-view').forEach(v => v.classList.toggle('active', v.id === id));
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   viewMemory.recall();
-  if(id==='mAgenda'){agenda.render();agenda.refreshConfirmations();}
+  if(id==='mAgenda'){agenda.render();agenda.refreshConfirmations();}if(id==='mAlerts')alertCenter.render();
 }
 
 document.addEventListener('click', async e => {
@@ -215,7 +216,7 @@ async function saveMobileFollowup(e){
 
 setupPwaInstall();
 function renderAll(){return viewMemory.preserve(()=>renderAllContent());}
-function renderAllContent(){ renderServices(); renderSelects(); renderDashboard(); renderInvoices(); renderFollowups(); renderClients(); renderHistory(); renderSyncDetails(); renderSummary(); renderMobileTools(); }
+function renderAllContent(){ renderServices(); renderSelects(); renderDashboard(); renderInvoices(); renderFollowups(); renderClients(); renderHistory(); renderSyncDetails(); renderSummary(); renderMobileTools(); alertCenter.render(); }
 function renderSelects(){
   const opts = state.clients.map(c => `<option value="${esc(c.id)}">${esc(c.name || 'Cliente')}</option>`).join('');
   ['mInvClient', 'mFollowClient'].forEach(id => { const el = $(id); if(el){ const prev = el.value; el.innerHTML = `<option value="">Seleccionar cliente</option>${opts}`; if(prev) el.value = prev; } });
@@ -983,6 +984,7 @@ document.addEventListener('click',e=>{
   const history=e.target.closest('[data-client-history]');if(history){$('mHistorySearch').value=clientBy(history.dataset.clientHistory).name||'';renderHistory();switchTab('mHistory');}
 });
 const agenda=createAgenda({$,state,clientBy,today,esc,phoneLink,statusBadge,colRef,docRef,addDoc,updateDoc,serverTimestamp,switchTab,showMobileNotice});
+const alertCenter=createAlertCenter({$,state,today,invoiceBalance,invoiceStatus,money,docRef,updateDoc,showMobileNotice,esc});
 function renderMobileTools(){
   agenda.render();
   const q=normalizeClientSearch($('mReceivableSearch').value);

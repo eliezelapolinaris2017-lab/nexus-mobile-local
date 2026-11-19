@@ -30,3 +30,6 @@ Supabase Auth, onboarding de empresa y activación automática de confirmaciones
 
 ## NOVA 2.4.1
 Mensajes de autenticación en español y control de solicitudes simultáneas; redirección de correo solicitada hacia la app (la URL debe estar autorizada en Supabase Auth). Indicador de sincronización basado en la respuesta de Supabase, no solamente en IndexedDB. Se conserva la verificación del correo y la protección de datos por usuario.
+
+## Nova Cloud 2.5
+Centro de avisos calculados desde registros locales: citas hoy/mañana, facturas vencidas, seguimientos próximos (7 días), clientes con historial sin servicio por 180 días. Posponer conserva la fecha junto al registro; clientes se posponen 30 días, otros avisos 1 día. WhatsApp prepara mensajes, el operador decide si envía; no hay envío autónomo, cron ni push fuera de la app. Recuperación de contraseña por correo requiere URL https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/ autorizada en Supabase Auth y proveedor de correo SMTP operativo. Respaldos privados al primer cambio de cada día de actividad, hasta tres fechas; se descargan desde Ajustes. No son garantía ante pérdida completa del proyecto. Usar copias externas y un dominio de origen exclusivo antes de producción.
