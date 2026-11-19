@@ -1,3 +1,4 @@
+import { setupCloud } from './cloud.js';
 import {getProfile,saveProfile,exportWorkspace,restoreWorkspace,onSnapshot,addDoc,updateDoc,serverTimestamp} from './local-db.js';
 export function setupStandalone({$,state,COLS,colRef,docRef,clientBy,today,switchTab,ensureLines,renderInvoiceLines,renderAll,renderSummary,calculateMobilePrice,setSync,showMobileNotice}){
 let unsub=[];
@@ -31,5 +32,6 @@ $('localExport').addEventListener('click',async()=>{try{const backup=await expor
 $('localImport').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{if(!confirm('El respaldo reemplazará los datos locales. ¿Continuar?'))return;if(file.size>100*1024*1024)throw new Error('Respaldo demasiado grande');await restoreWorkspace(JSON.parse(await file.text()));location.reload();}catch(e){showMobileNotice(e.message,'danger');}finally{$('localImport').value='';}});
 $('localServiceDate').value=today();$('localServiceForm').addEventListener('submit',async e=>{e.preventDefault();const c=clientBy($('localServiceClient').value),title=$('localServiceTitle').value.trim();if(!c.id||!title)return;try{await addDoc(colRef('services'),{clientId:c.id,clientName:c.name,title,date:$('localServiceDate').value,time:$('localServiceTime').value,note:$('localServiceNote').value,status:'Programado',createdAt:serverTimestamp()});e.target.reset();$('localServiceDate').value=today();showMobileNotice('Trabajo guardado','ok');}catch(err){showMobileNotice(err.message,'danger');}});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-local-complete]');if(!b)return;if(!confirm('¿Marcar trabajo completado?'))return;try{await updateDoc(docRef('services',b.dataset.localComplete),{status:'Completado',updatedAt:serverTimestamp()});}catch(err){showMobileNotice(err.message,'danger');}});
+setupCloud();
 start().then(()=>{$('mobileAuthMsg').textContent='';setupBtn.disabled=false;}).catch(e=>{revealError(e);setupBtn.disabled=false;});
 }

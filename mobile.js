@@ -3,7 +3,7 @@ import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
-const APP_VERSION = 'Local 2.2';
+const APP_VERSION = 'NOVA 2.3';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';

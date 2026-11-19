@@ -4,9 +4,30 @@ const empty=()=>({schema:1,profile:null,records:Object.fromEntries(collections.m
 let opening;const listeners=new Map();
 const channel=typeof BroadcastChannel!=='undefined'?new BroadcastChannel(KEY):null;
 function database(){return opening??=new Promise((resolve,reject)=>{const r=indexedDB.open(KEY,1);r.onupgradeneeded=()=>r.result.createObjectStore('data');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-async function transact(write,fn){const d=await database();return new Promise((resolve,reject)=>{const t=d.transaction('data',write?'readwrite':'readonly'),s=t.objectStore('data'),r=s.get('workspace');let result,err;r.onsuccess=()=>{try{const v=r.result||empty();result=fn(v);if(write)s.put(v,'workspace');}catch(e){err=e;t.abort();}};t.oncomplete=()=>resolve(result);t.onabort=()=>reject(err||t.error||new Error('Operación cancelada'));t.onerror=()=>reject(t.error);});}
+async function transact(write,fn,bump=true){const d=await database();return new Promise((resolve,reject)=>{const t=d.transaction('data',write?'readwrite':'readonly'),s=t.objectStore('data'),r=s.get('workspace');let result,err;r.onsuccess=()=>{try{const v=r.result||empty();result=fn(v);if(write){if(bump)v.localRevision=(v.localRevision||0)+1;s.put(v,'workspace');}}catch(e){err=e;t.abort();}};t.oncomplete=()=>{resolve(result);if(write&&bump){globalThis.dispatchEvent?.(new Event('nova-local-change'));channel?.postMessage('cloud-change');}};t.onabort=()=>reject(err||t.error||new Error('Operación cancelada'));t.onerror=()=>reject(t.error);});}
 const clone=x=>structuredClone(x);
-export const exportWorkspace=()=>transact(false,clone);
+const snapshot=v=>clone({schema:v.schema,profile:v.profile,records:v.records,sequences:v.sequences});
+export const exportWorkspace=()=>transact(false,snapshot);
+export const cloudSnapshot=()=>transact(false,v=>({snapshot:snapshot(v),revision:v.localRevision||0,binding:clone(v.cloudBinding||null)}));
+export async function acknowledgeCloud(owner,base,version,revision){
+ await transact(true,v=>{
+   const binding=v.cloudBinding;
+   if(binding&&(binding.owner!==owner||binding.version!==base))throw Error('La conexión cambió mientras guardabas. Revisa el estado.');
+   if(!binding&&base!==0)throw Error('No hay conexión local asociada.');
+   if((v.localRevision||0)<revision)throw Error('Versión local inválida.');
+   v.cloudBinding={owner,version,syncedRevision:revision};
+ },false);
+}
+export async function applyCloudSnapshot(data,owner,version,revision){
+ validate(data);
+ await transact(true,v=>{
+   if((v.localRevision||0)!==revision)throw Error('Hay cambios locales recientes. No se reemplazaron.');
+   if(v.cloudBinding&&v.cloudBinding.owner!==owner)throw Error('Este dispositivo contiene otra cuenta de NOVA.');
+   v.profile=clone(data.profile);v.records=Object.fromEntries(collections.map(c=>[c,clone(data.records[c])]));v.sequences=clone(data.sequences);
+   v.localRevision=(v.localRevision||0)+1;v.cloudBinding={owner,version,syncedRevision:v.localRevision};
+ },false);
+ for(const c of collections)notify(c);
+}
 export const getProfile=()=>transact(false,v=>clone(v.profile));
 export async function saveProfile(p){await transact(true,v=>{v.profile={...v.profile,...clone(p)};});}
 export const serverTimestamp=()=>new Date().toISOString();
@@ -14,7 +35,7 @@ export const collection=(_db,_users,_uid,c)=>({c});
 export const doc=(_db,_users,_uid,c,id)=>({c,id});
 function check(c){if(!collections.includes(c))throw new Error('Colección no válida');}
 function notify(c){for(const cb of listeners.get(c)||[])cb();channel?.postMessage(c);}
-if(channel)channel.onmessage=e=>{for(const cb of listeners.get(e.data)||[])cb();};
+if(channel)channel.onmessage=e=>{if(e.data==='cloud-change'){globalThis.dispatchEvent?.(new Event('nova-local-change'));return;}for(const cb of listeners.get(e.data)||[])cb();};
 export function onSnapshot(ref,success,error){check(ref.c);let active=true;const load=()=>transact(false,v=>Object.entries(v.records[ref.c]).map(([id,data])=>({id,data:()=>clone(data)}))).then(docs=>{if(active)success({docs});}).catch(e=>{if(active)error?.(e);});if(!listeners.has(ref.c))listeners.set(ref.c,new Set());listeners.get(ref.c).add(load);load();return()=>{active=false;listeners.get(ref.c)?.delete(load);};}
 export async function addDoc(ref,data){check(ref.c);const id=crypto.randomUUID();await transact(true,v=>{v.records[ref.c][id]=clone(data);});notify(ref.c);return {id};}
 export async function updateDoc(ref,data){check(ref.c);await transact(true,v=>{if(!Object.hasOwn(v.records[ref.c],ref.id))throw new Error('Registro no encontrado');v.records[ref.c][ref.id]={...v.records[ref.c][ref.id],...clone(data)};});notify(ref.c);}

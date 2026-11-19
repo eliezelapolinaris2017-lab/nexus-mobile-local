@@ -25,6 +25,7 @@ jobs:
           node --check confirmations.js
           node --check confirm-page.js
           node --check local-db.js
+          node --check cloud.js
           node --check sw.js
           node --check tests/browser.mjs
           ! grep -E 'firebaseConfig|www.gstatic.com/firebasejs|oasisservicepr.com|confirmafy.com' mobile.js index.html local-db.js standalone-ui.js
