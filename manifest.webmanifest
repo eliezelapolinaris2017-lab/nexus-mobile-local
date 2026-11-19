@@ -1,7 +1,7 @@
 {
-  "name": "Nexus Mobile Local",
-  "short_name": "Nexus Local",
-  "description": "Operación móvil independiente",
+  "name": "Nova Cloud",
+  "short_name": "Nova Cloud",
+  "description": "Gestión empresarial en la nube",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -9,9 +9,15 @@
   "theme_color": "#f3f5fa",
   "icons": [
     {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "nova-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "nova-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
