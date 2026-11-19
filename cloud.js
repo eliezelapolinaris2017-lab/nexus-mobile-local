@@ -3,7 +3,7 @@ import {cloudSnapshot,acknowledgeCloud,applyCloudSnapshot} from './local-db.js';
 const BASE='https://cgpfpxueqciefclonghz.supabase.co';
 const API='sb_publishable_C80PjdtDeDfIT2z5EnUh5g_CiOUlUoG';
 const SESSION='nova-cloud-session-v1';
-const AUTH_RETURN='https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/';
+const AUTH_RETURN=location.origin==='https://nova.nexustoolspr.com'?'https://nova.nexustoolspr.com/':'https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/';
 let nextSignupAt=0,nextRecoveryAt=0,authWorking=false,recoveryToken=null;
 function authError(e){
  const code=e.code||'';
