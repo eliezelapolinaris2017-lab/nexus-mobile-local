@@ -29,8 +29,8 @@ jobs:
           node --check alerts.js
           node --check finance.js
           node --check invoice-pdf.js
-          node tests/finance.mjs
-          node tests/alerts.mjs
+          timeout 30s node tests/finance.mjs
+          timeout 30s node tests/alerts.mjs
           node --check sw.js
           node --check tests/browser.mjs
           ! grep -E 'firebaseConfig|www.gstatic.com/firebasejs|oasisservicepr.com|confirmafy.com' mobile.js index.html local-db.js standalone-ui.js

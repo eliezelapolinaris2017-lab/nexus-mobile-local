@@ -4,7 +4,8 @@ const financeCollections=['expenses','suppliers','purchases','purchasePayments',
 const collections=[...coreCollections,...financeCollections];
 const empty=()=>({schema:1,profile:null,records:Object.fromEntries(collections.map(c=>[c,{}])),sequences:{}});
 let opening;const listeners=new Map();
-const channel=typeof BroadcastChannel!=='undefined'?new BroadcastChannel(KEY):null;
+// Cross-tab notifications are only needed in the browser, not in Node unit tests.
+const channel=typeof window!=='undefined'&&typeof BroadcastChannel!=='undefined'?new BroadcastChannel(KEY):null;
 function database(){return opening??=new Promise((resolve,reject)=>{const r=indexedDB.open(KEY,1);r.onupgradeneeded=()=>r.result.createObjectStore('data');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function transact(write,fn,bump=true){const d=await database();return new Promise((resolve,reject)=>{const t=d.transaction('data',write?'readwrite':'readonly'),s=t.objectStore('data'),r=s.get('workspace');let result,err;r.onsuccess=()=>{try{const v=r.result||empty();for(const c of financeCollections)v.records[c]??={};result=fn(v);if(write){if(bump)v.localRevision=(v.localRevision||0)+1;s.put(v,'workspace');}}catch(e){err=e;t.abort();}};t.oncomplete=()=>{resolve(result);if(write&&bump){globalThis.dispatchEvent?.(new Event('nova-local-change'));channel?.postMessage('cloud-change');}};t.onabort=()=>reject(err||t.error||new Error('Operación cancelada'));t.onerror=()=>reject(t.error);});}
 const clone=x=>structuredClone(x);
