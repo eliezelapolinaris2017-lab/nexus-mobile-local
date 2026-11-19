@@ -1,7 +1,22 @@
 import assert from 'node:assert/strict';
 import {chromium,webkit} from 'playwright';
-const base='http://127.0.0.1:8080/';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {resolve,extname,sep} from 'node:path';
+// Test against a server whose network can actually be cut. WebKit's
+// setOffline emulation has returned an internal navigation error before
+// service-worker dispatch on Linux. Test real local-server unavailability.
+let disconnected=false,networkAttempts=0;
+const root=process.cwd(),types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
+const server=createServer(async(req,res)=>{
+ if(disconnected){networkAttempts++;req.socket.destroy();return;}
+ try{const path=decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname),file=resolve(root,'.'+(path==='/'?'/index.html':path));if(!file.startsWith(root+sep))throw Error('path');const data=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(data);}catch{res.writeHead(404);res.end();}
+});
+await new Promise((ok,bad)=>{server.once('error',bad);server.listen(0,'127.0.0.1',ok);});
+const base='http://127.0.0.1:'+server.address().port+'/';
+try{
 for(const engine of [chromium,webkit]){
+ disconnected=false;networkAttempts=0;
  const browser=await engine.launch({headless:true});
  try{
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR:',e.message);});page.on('console',m=>{if(m.type()==='error'||m.type()==='warning')console.log('BROWSER:',m.type(),m.text());});page.on('dialog',d=>d.type()==='prompt'?d.accept('Efectivo'):d.accept());
@@ -22,6 +37,9 @@ for(const engine of [chromium,webkit]){
   return reply({error:'unmocked'},404);
  });
  await context.addInitScript(()=>{
+  // Only the browser's network-state signal is simulated in WebKit;
+  // the HTTP server itself rejects every request during the offline phase.
+  if(sessionStorage.getItem('nova-test-network-down')==='1')Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});
   const nativeFetch=window.fetch.bind(window);
   window.fetch=async(input,init={})=>{
    const url=typeof input==='string'?input:input.url;
@@ -52,7 +70,7 @@ for(const engine of [chromium,webkit]){
  await page.locator('#mAgendaList [data-agenda-done]').click();await page.locator('#mAgendaList').getByText('Completado',{exact:true}).waitFor();
  const agendaBackup=await workspace();assert.equal(Object.values(agendaBackup.records.services)[0].time,'10:30');assert.equal(Object.values(agendaBackup.records.services)[0].status,'Completado');
  assert.equal(Object.values(backup.records.invoices)[0].total,111.5);
- await page.locator('nav [data-tab=mServices]').click();await page.locator('#mServices summary').click();await page.locator('#localServiceClient').selectOption(Object.keys(backup.records.clients)[0]);await page.locator('#localServiceTitle').fill('Trabajo prueba');await page.locator('#localServiceForm button[type=submit]').click();await page.locator('#mServiceList').getByText('Trabajo prueba',{exact:true}).waitFor();await page.locator('#mServiceList [data-local-complete]').click();await page.locator('#mServiceList [data-local-complete]').waitFor({state:'detached'});
+ await page.locator('nav [data-tab=mServices]').click();await page.locator('#mServices summary').click();await page.locator('#localServiceClient').selectOption(Object.keys(backup.records.clients)[0]);await page.locator('#localServiceTitle').fill('Mantenimiento preventivo prueba');await page.locator('#localServiceForm button[type=submit]').click();await page.locator('#mServiceList').getByText('Mantenimiento preventivo prueba',{exact:true}).waitFor();await page.locator('#mServiceList [data-local-complete]').click();await page.locator('#mServiceList [data-local-complete]').waitFor({state:'detached'});const maintenanceBackup=await workspace();const follow=Object.values(maintenanceBackup.records.followups).find(f=>f.autoMaintenance);assert.ok(follow);assert.equal(follow.intervalMonths,6);assert.equal(follow.type,'Mantenimiento');console.log(engine.name()+': seguimiento preventivo persistido');
  await page.locator('nav [data-tab=mMore]').click();await page.locator('#mMore [data-tab=mReceivable]').click();await page.locator('#mReceivableList [data-mark-paid]').first().click();
  await page.waitForFunction(async()=>Object.keys((await (await import('/local-db.js')).exportWorkspace()).records.payments).length===1);
  backup=await workspace();assert.equal(Object.values(backup.records.payments)[0].amount,111.5);
@@ -66,10 +84,20 @@ for(const engine of [chromium,webkit]){
  const financeDownload=page.waitForEvent('download');await page.locator('#finReport').click();assert.match((await financeDownload).suggestedFilename(),/^nova-finanzas-.*\.pdf$/);
 
  await page.evaluate(async()=>{const m=await import('/local-db.js');const b=await m.exportWorkspace();await m.restoreWorkspace(b);});
- await context.setOffline(true);await page.reload();await page.locator('#mobileApp').waitFor({state:'visible'});assert.equal(await page.locator('#mobileBusiness').innerText(),'Prueba Local');
+ // Verify the actual application shell is present before disconnecting.
+ const cached=await page.evaluate(async()=>{const reg=await navigator.serviceWorker.ready;const cache=await caches.keys();const names=cache.filter(x=>x.startsWith('nexus-mobile-local-'));const c=await caches.open(names.at(-1));return {controlled:!!navigator.serviceWorker.controller,html:!!(await c.match(new URL('index.html',reg.scope))),module:!!(await c.match(new URL('maintenance.js',reg.scope)))};});
+ assert.deepEqual(cached,{controlled:true,html:true,module:true});
+ // WebKit tests use a server-side network cut instead of a browser emulation
+ // that has been observed to abort navigation before reaching the worker.
+ await page.evaluate(()=>sessionStorage.setItem('nova-test-network-down','1'));
+ disconnected=true;
+ if(engine===chromium)await context.setOffline(true);
+ await page.reload();await page.locator('#mobileApp').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>navigator.onLine),false);assert.equal(await page.locator('#mobileBusiness').innerText(),'Prueba Local');
  const offline=await workspace();assert.equal(Object.keys(offline.records.invoices).length,1);assert.equal(Object.keys(offline.records.services).length,2);assert.ok(Object.values(offline.records.services).every(s=>s.status==='Completado'));
  await page.locator('nav [data-tab=mClients]').click();await page.locator('#mNewClientPanel summary').click();await page.locator('#mClientName').fill('Cliente offline');await page.locator('#mClientForm button[type=submit]').click();
  await page.waitForFunction(async()=>Object.keys((await (await import('/local-db.js')).exportWorkspace()).records.clients).length===2);
  assert.deepEqual(errors,[]);console.log(engine.name()+': configuración, factura, cobro, trabajo, respaldo y creación offline correctos');
- }finally{await browser.close();}
+ }finally{disconnected=false;await browser.close();}
 }
+
+}finally{server.closeAllConnections();await new Promise(ok=>server.close(ok));}

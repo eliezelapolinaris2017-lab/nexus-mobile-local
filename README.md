@@ -52,3 +52,5 @@ Catálogo offline de 152 referencias por fabricante y serie (Midea, Gree, Daikin
 
 ## Nova 3.2 HVAC
 Seguimientos preventivos al completar trabajos o emitir facturas de instalación/mantenimiento (no borradores), seis meses calendario. Facturar desde trabajo o agenda conserva vínculo y evita duplicados para esa visita. Al marcar mantenimiento realizado se programa el próximo. Avisos desde 14 días antes y WhatsApp preparado para envío por el usuario. No automatiza envío externo ni reescribe historial en bloque. Logo en confirmación pública.
+
+3.2.1: navegación offline detecta explícitamente solicitudes de documento y usa URL absoluta de la caché. Pruebas Chromium con emulación offline y WebKit con desconexión real del servidor HTTP local y señal navigator.onLine simulada. Ambas deben recargar y conservar datos sin respuestas de red; no se excluye WebKit. Prueba de persistencia del seguimiento añadida.
