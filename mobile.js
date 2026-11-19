@@ -5,11 +5,13 @@ import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
 import { createFinance } from './finance.js';
-const APP_VERSION = 'NOVA 3.0.1';
+import { renderInvoicePdf } from './invoice-pdf.js';
+const APP_VERSION = 'NOVA 3.0.3';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
 let currentDocId = null;
+let currentDocSnapshot = null;
 let invoiceLines = [];
 let lastCreatedInvoiceId = null;
 let editingInvoiceId = null;
@@ -130,7 +132,7 @@ document.addEventListener('click', async e => {
   const preview = e.target.closest('#mPreviewInvoice'); if(preview){ openInvoiceDoc(null, buildInvoicePreviewObject('Vista previa')); return; }
   const last = e.target.closest('#mViewLastDoc'); if(last){ if(lastCreatedInvoiceId) openInvoiceDoc(lastCreatedInvoiceId); else openInvoiceDoc(null, buildInvoicePreviewObject('Vista previa')); return; }
   if(e.target.id === 'mCloseDoc'){ closeDoc(); return; }
-  if(e.target.id === 'mDownloadDoc'){try{const inv=state.invoices.find(i=>i.id===currentDocId)||buildInvoicePreviewObject('Vista previa');const name='Factura-'+String(inv.number||'Vista-previa').replace(/[^a-z0-9_-]+/gi,'-')+'.pdf';downloadPdfFile(await buildInvoicePdfFile(inv,name),name);}catch(err){showMobileNotice('No se pudo generar PDF: '+err.message,'danger');}return;}
+  if(e.target.id === 'mDownloadDoc'){try{const inv=currentInvoiceDocument();const name=invoiceFilename(inv);downloadPdfFile(await buildInvoicePdfFile(inv,name),name);}catch(err){showMobileNotice('No se pudo generar PDF: '+err.message,'danger');}return;}
   if(e.target.id === 'mPrintDoc'){ printCurrentDoc(); return; }
   if(e.target.id === 'mShareDoc'){ shareCurrentDoc(); return; }
   if(e.target.id === 'applyUpdateBtn'){ applyWaitingUpdate(); return; }
@@ -552,177 +554,17 @@ async function getPdfLogoDataUrl(){
   }
   return '';
 }
-function fitText(docp, text, x, y, maxWidth, lineHeight=11, maxLines=3){
-  const lines = docp.splitTextToSize(String(text || ''), maxWidth).slice(0, maxLines);
-  lines.forEach((line, idx) => docp.text(line, x, y + (idx * lineHeight)));
-  return y + Math.max(1, lines.length) * lineHeight;
-}
-function drawLabelBox(docp, x, y, w, h, label, value, opts={}){
-  docp.setDrawColor(70,70,70); docp.setLineWidth(.8); docp.roundedRect(x, y, w, h, 4, 4);
-  docp.setTextColor(20,20,20); docp.setFont('helvetica','bold'); docp.setFontSize(8);
-  docp.text(String(label || '').toUpperCase(), x+8, y+12);
-  docp.setFont('helvetica', opts.bold ? 'bold' : 'normal'); docp.setFontSize(opts.size || 9);
-  if(opts.center){ docp.text(String(value || ''), x+w/2, y+h/2+5, { align:'center' }); }
-  else { fitText(docp, value, x+8, y+28, w-16, 11, opts.lines || 3); }
-}
-function addPdfFooter(docp, pageNo=1){
-  const p = state.profile || {};
-  docp.setFont('helvetica','italic'); docp.setFontSize(10); docp.setTextColor(30,30,30);
-  docp.text('¡Gracias por confiar en nosotros!', 297.5, 805, { align:'center' });
-  docp.setFont('helvetica','bold'); docp.setFontSize(8);
-  docp.text(String(p.businessName || 'Mi negocio'), 297.5, 820, { align:'center' });
-  docp.setFont('helvetica','normal'); docp.text(String(pageNo), 540, 820, { align:'right' });
-}
+function currentInvoiceDocument(){return (currentDocId&&state.invoices.find(i=>i.id===currentDocId))||currentDocSnapshot||buildInvoicePreviewObject('Vista previa');}
+function invoiceFilename(inv){return 'Factura-'+String(inv.number||'Vista-previa').replace(/[^a-z0-9_-]+/gi,'-')+'.pdf';}
 async function buildInvoicePdfFile(inv, filename){
-  if(!window.jspdf?.jsPDF) throw new Error('Motor PDF no disponible.');
-  const { jsPDF } = window.jspdf;
-  const docp = new jsPDF({ unit:'pt', format:'a4', compress:true });
-  const p = state.profile || {};
-  const c = clientBy(inv.clientId);
-  const totals = invoiceTotalsDoc(inv);
-  const existing = inv.id ? state.invoices.find(i => i.id === inv.id) : null;
-  const paid = existing ? invoicePaid(existing) : (String(inv.status || '') === 'Pagada' ? totals.total : Number(inv.paid || 0));
-  const bal = existing ? invoiceBalance(existing) : Math.max(0, totals.total - paid);
-  const status = existing ? invoiceStatus(existing) : (bal <= 0 || String(inv.status || '') === 'Pagada' ? 'Pagada' : (String(inv.status || '') || 'Pendiente'));
-  const logo = await getPdfLogoDataUrl();
-  const items = Array.isArray(inv.items) && inv.items.length ? inv.items : [{ description:inv.serviceTitle || inv.invoiceType || 'Servicio', qty:1, price:totals.subtotal, discount:0 }];
-
-  const W = docp.internal.pageSize.getWidth();
-  const H = docp.internal.pageSize.getHeight();
-  const M = 54;
-  const navy = [9, 42, 82];
-  const blue = [17, 72, 132];
-  const line = [212, 221, 232];
-  const light = [245, 248, 252];
-  let pageNo = 1;
-
-  const txt = (text, x, y, opts={}) => {
-    docp.setFont('helvetica', opts.bold ? 'bold' : (opts.italic ? 'italic' : 'normal'));
-    docp.setFontSize(opts.size || 9);
-    if(opts.color) docp.setTextColor(...opts.color); else docp.setTextColor(16,24,40);
-    docp.text(String(text ?? ''), x, y, opts.align ? { align:opts.align, maxWidth:opts.maxWidth } : (opts.maxWidth ? { maxWidth:opts.maxWidth } : undefined));
-  };
-  const moneyText = n => money(n).replace(/\u00a0/g,' ');
-  const box = (x,y,w,h, opts={}) => {
-    docp.setDrawColor(...(opts.stroke || line));
-    docp.setLineWidth(opts.lineWidth || .8);
-    if(opts.fill){ docp.setFillColor(...opts.fill); docp.roundedRect(x,y,w,h,opts.r||4,opts.r||4,'FD'); }
-    else docp.roundedRect(x,y,w,h,opts.r||4,opts.r||4,'S');
-  };
-  const wrap = (text, width) => docp.splitTextToSize(String(text || ''), width);
-  const addFooter = () => {
-    txt('¡Gracias por su preferencia!', W/2, H-82, { size:12, italic:true, color:blue, align:'center' });
-    docp.setDrawColor(...line); docp.line(M, H-58, W-M, H-58);
-    txt(String(p.businessName || 'Mi negocio').toUpperCase(), W/2-34, H-38, { size:7, bold:true, color:[100,116,139], align:'right' });
-    txt('|', W/2, H-38, { size:7, color:[100,116,139], align:'center' });
-    txt('Gracias por su preferencia', W/2+34, H-38, { size:7, color:[100,116,139] });
-    txt(String(pageNo), W-M, H-38, { size:7, color:[100,116,139], align:'right' });
-  };
-  const newPage = () => { addFooter(); docp.addPage(); pageNo += 1; y = M; };
-
-  // Header igual al documento corporativo de escritorio: logo/empresa izquierda, contacto derecha, título al centro.
-  if(logo){
-    try{ docp.addImage(logo, 'PNG', M, 42, 64, 48, undefined, 'FAST'); }catch(e){}
-  }
-  txt(String(p.businessName || 'Mi negocio').toUpperCase(), M + (logo ? 76 : 0), 56, { size:18, bold:true, color:navy, maxWidth:260 });
-  if(p.email) txt(p.email, M + (logo ? 76 : 0), 82, { size:8, color:[71,85,105] });
-
-  const contactX = W - M;
-  const contactLines = [p.address || '', p.phone || '', p.email || '', p.web || p.website || ''].filter(Boolean);
-  contactLines.forEach((l,i)=>txt(l, contactX, 52 + i*12, { size:8, bold:i===0, color:[71,85,105], align:'right' }));
-  docp.setDrawColor(...line); docp.line(W-162, 45, W-162, 98);
-
-  txt('FACTURA', W/2, 140, { size:22, bold:true, color:navy, align:'center' });
-  txt(`No. de Factura: ${inv.number || 'Factura'}`, M, 128, { size:8.5, bold:true });
-  txt(`Fecha: ${niceDate(inv.date || today())}`, M, 146, { size:8.5, bold:true });
-  txt(`Vence: ${inv.dueDate ? niceDate(inv.dueDate) : '—'}`, M, 164, { size:8.5, bold:true });
-
-  box(W-154, 116, 100, 54, { stroke:line, fill:[255,255,255] });
-  docp.setFillColor(...navy); docp.roundedRect(W-154, 116, 100, 22, 4, 4, 'F');
-  txt('ESTADO', W-104, 131, { size:7.5, bold:true, color:[255,255,255], align:'center' });
-  txt(String(status).toUpperCase(), W-104, 157, { size:10, bold:true, color: status === 'Pagada' ? [22,101,52] : navy, align:'center' });
-
-  docp.setDrawColor(...line); docp.line(M, 190, W-M, 190);
-
-  // Cliente
-  const cardY = 214;
-  box(M, cardY, 235, 82, { stroke:line, fill:[255,255,255] });
-  box(M+250, cardY, W-M-(M+250), 82, { stroke:line, fill:[255,255,255] });
-  txt('CLIENTE', M+12, cardY+18, { size:7.5, bold:true, color:blue });
-  const cName = inv.clientName || c.name || '';
-  txt(cName, M+12, cardY+38, { size:9, bold:true, maxWidth:210 });
-  txt('Teléfono:', M+262, cardY+20, { size:7.5, bold:true, color:blue });
-  txt(c.phone || inv.clientPhone || '—', M+262, cardY+38, { size:8.5 });
-  txt('Dirección:', M+262, cardY+56, { size:7.5, bold:true, color:blue });
-  wrap(c.address || inv.address || c.city || '—', W-M-(M+274)).slice(0,2).forEach((l,i)=>txt(l, M+262, cardY+72+i*10, { size:8 }));
-
-  // Tabla de partidas
-  let y = 328;
-  const tableX = M, tableW = W - M*2;
-  const colDescW = 285, colQtyW = 68, colPriceW = 105, colTotalW = tableW - colDescW - colQtyW - colPriceW;
-  const drawItemsHeader = () => {
-    docp.setFillColor(...navy); docp.roundedRect(tableX, y, tableW, 26, 3, 3, 'F');
-    txt('DESCRIPCIÓN', tableX+10, y+17, { size:7.5, bold:true, color:[255,255,255] });
-    txt('CANT.', tableX+colDescW+colQtyW/2, y+17, { size:7.5, bold:true, color:[255,255,255], align:'center' });
-    txt('PRECIO UNIT.', tableX+colDescW+colQtyW+colPriceW/2, y+17, { size:7.5, bold:true, color:[255,255,255], align:'center' });
-    txt('TOTAL', tableX+tableW-10, y+17, { size:7.5, bold:true, color:[255,255,255], align:'right' });
-    y += 26;
-  };
-  drawItemsHeader();
-  items.forEach((it)=>{
-    const desc = String(it.description || 'Servicio');
-    const qty = Number(it.qty || 1);
-    const price = Number(it.price || 0);
-    const discount = Number(it.discount || 0);
-    const total = lineNet(it);
-    const lines = wrap(desc, colDescW-18);
-    const rowH = Math.max(42, 18 + lines.length * 12);
-    if(y + rowH > 628){ newPage(); drawItemsHeader(); }
-    docp.setDrawColor(...line); docp.setFillColor(255,255,255); docp.rect(tableX, y, tableW, rowH, 'FD');
-    docp.line(tableX+colDescW, y, tableX+colDescW, y+rowH);
-    docp.line(tableX+colDescW+colQtyW, y, tableX+colDescW+colQtyW, y+rowH);
-    docp.line(tableX+colDescW+colQtyW+colPriceW, y, tableX+colDescW+colQtyW+colPriceW, y+rowH);
-    lines.slice(0,4).forEach((l,i)=>txt(l, tableX+10, y+19+i*12, { size:8.2, bold:i===0 }));
-    txt(qty.toFixed(2), tableX+colDescW+colQtyW/2, y+22, { size:8, align:'center' });
-    txt(moneyText(price), tableX+colDescW+colQtyW+colPriceW-10, y+22, { size:8, align:'right' });
-    txt(moneyText(total), tableX+tableW-10, y+22, { size:8, bold:true, align:'right' });
-    y += rowH;
-  });
-
-  // Bloques inferiores y totales
-  y += 28;
-  if(y > 610){ newPage(); }
-  const lowerY = y;
-  box(M, lowerY, 240, 76, { stroke:line, fill:[255,255,255] });
-  txt('NOTAS', M+12, lowerY+18, { size:7.5, bold:true, color:blue });
-  wrap(inv.notes || 'Gracias por su preferencia.', 216).slice(0,4).forEach((l,i)=>txt(l, M+12, lowerY+38+i*11, { size:8 }));
-
-  box(M, lowerY+92, 240, 76, { stroke:line, fill:[255,255,255] });
-  txt('CONDICIONES', M+12, lowerY+110, { size:7.5, bold:true, color:blue });
-  wrap(invoicePaymentTerms(inv, inv.terms || inv.conditions || 'Pago según acuerdo.'), 216).slice(0,4).forEach((l,i)=>txt(l, M+12, lowerY+130+i*11, { size:8 }));
-
-  const tx = W - M - 210;
-  const tw = 210;
-  const rh = 26;
-  const totalRows = [
-    ['SUBTOTAL', totals.subtotal, false, [255,255,255]],
-    [`IVU (${totals.taxPercent}%)`, totals.ivu, false, [255,255,255]],
-    ['TOTAL', totals.total, true, [239,246,255]],
-    ['PAGADO', paid, false, [255,255,255]],
-    ['BALANCE', bal, true, [219,245,226]]
-  ];
-  let ty = lowerY;
-  totalRows.forEach(([label,val,bold,fill])=>{
-    docp.setFillColor(...fill); docp.setDrawColor(...line); docp.rect(tx, ty, tw, rh, 'FD');
-    docp.line(tx+118, ty, tx+118, ty+rh);
-    txt(label, tx+108, ty+17, { size:8.5, bold:!!bold, align:'right', color:navy });
-    txt(moneyText(val), tx+200, ty+17, { size:8.5, bold:!!bold, align:'right', color:navy });
-    ty += rh;
-  });
-
-  addFooter();
-  const blob = docp.output('blob');
-  return new File([blob], filename || `Factura-${inv.number || 'Nexus'}.pdf`, { type:'application/pdf' });
+ if(!window.jspdf?.jsPDF)throw new Error('Motor PDF no disponible.');
+ const totals=invoiceTotalsDoc(inv),existing=inv.id&&state.invoices.find(i=>i.id===inv.id);
+ const paid=existing?invoicePaid(existing):(inv.status==='Pagada'?totals.total:Number(inv.paid||0));
+ const balance=existing?invoiceBalance(existing):Math.max(0,totals.total-paid);
+ const status=existing?invoiceStatus(existing):(['Cancelada','Borrador'].includes(inv.status)?inv.status:balance<=0?'Pagada':inv.status||'Pendiente');
+ const p=state.profile||{},logo=await getPdfLogoDataUrl();
+ const doc=renderInvoicePdf(window.jspdf.jsPDF,{profile:p,client:clientBy(inv.clientId),invoice:inv,totals,paid,balance,status,logo,paymentTerms:invoicePaymentTerms(inv,inv.terms||inv.conditions||'Pago según acuerdo.'),dateText:niceDate,lineNet});
+ return new File([doc.output('blob')],filename||invoiceFilename(inv),{type:'application/pdf'});
 }
 async function shareInvoice(id){
   const inv = state.invoices.find(i => i.id === id);
@@ -792,7 +634,7 @@ async function openPdfFile(file, filename, targetWindow=null){
 async function openPdfInIOSViewer(file, filename, targetWindow=null){
   const safeName = filename || file.name || 'Factura.pdf';
   const dataUrl = await fileToDataUrl(file);
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${safeName}</title><style>body{margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.96);backdrop-filter:blur(16px);padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;gap:10px;align-items:center;justify-content:space-between}.bar b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.actions{display:flex;gap:8px}a,button{border:1px solid #bfdbfe;background:#fff;color:#1d4ed8;border-radius:12px;padding:10px 12px;font-weight:800;text-decoration:none;font-size:14px}.primary{background:#2563eb;color:white;border-color:#2563eb}.note{padding:10px 16px;color:#475569;font-size:13px}.viewer{height:calc(100vh - 112px);width:100%;border:0;background:#fff}object,iframe{width:100%;height:100%;border:0}.fallback{padding:24px;text-align:center}</style></head><body><div class="bar"><b>${safeName}</b><div class="actions"><a class="primary" href="${dataUrl}" download="${safeName}">Descargar</a><button onclick="window.print()">Imprimir</button></div></div><div class="note">Para compartir: toca Descargar y luego usa el botón de compartir de iPhone/iPad desde Archivos o Vista previa.</div><div class="viewer"><object data="${dataUrl}" type="application/pdf"><iframe src="${dataUrl}"></iframe><div class="fallback"><p>Tu iPhone no mostró el PDF incrustado.</p><p><a class="primary" href="${dataUrl}" download="${safeName}">Descargar PDF</a></p></div></object></div></body></html>`;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${safeName}</title><style>body{margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.96);backdrop-filter:blur(16px);padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;gap:10px;align-items:center;justify-content:space-between}.bar b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.actions{display:flex;gap:8px}a,button{border:1px solid #bfdbfe;background:#fff;color:#1d4ed8;border-radius:12px;padding:10px 12px;font-weight:800;text-decoration:none;font-size:14px}.primary{background:#2563eb;color:white;border-color:#2563eb}.note{padding:10px 16px;color:#475569;font-size:13px}.viewer{height:calc(100vh - 112px);width:100%;border:0;background:#fff}object,iframe{width:100%;height:100%;border:0}.fallback{padding:24px;text-align:center}</style></head><body><div class="bar"><b>${safeName}</b><div class="actions"><a class="primary" href="${dataUrl}" download="${safeName}">Descargar</a></div></div><div class="note">Para imprimir o compartir: toca Descargar, abre el PDF desde Archivos y usa el menú Compartir.</div><div class="viewer"><object data="${dataUrl}" type="application/pdf"><iframe src="${dataUrl}"></iframe><div class="fallback"><p>Tu iPhone no mostró el PDF incrustado.</p><p><a class="primary" href="${dataUrl}" download="${safeName}">Descargar PDF</a></p></div></object></div></body></html>`;
   let w = targetWindow && !targetWindow.closed ? targetWindow : null;
   if(!w) w = window.open('', '_blank');
   if(w && !w.closed){
@@ -803,49 +645,10 @@ async function openPdfInIOSViewer(file, filename, targetWindow=null){
     downloadPdfFile(file, safeName);
   }
 }
-async function buildInvoicePdfFileFallback(inv, filename){
-  if(!window.jspdf?.jsPDF) throw new Error('Motor PDF no disponible.');
-  const { jsPDF } = window.jspdf;
-  const docp = new jsPDF({ unit:'pt', format:'a4' });
-  const p = state.profile || {};
-  const c = clientBy(inv.clientId);
-  const totals = invoiceTotalsDoc(inv);
-  const status = invoiceStatus(inv);
-  let y = 42;
-  docp.setFont('helvetica','bold'); docp.setFontSize(18); docp.text(p.businessName || 'Mi negocio', 42, y);
-  y += 24; docp.setFontSize(28); docp.text('FACTURA', 42, y);
-  y += 26; docp.setFont('helvetica','normal'); docp.setFontSize(11);
-  docp.text(`No.: ${inv.number || ''}`, 42, y); docp.text(`Estado: ${status}`, 360, y); y += 16;
-  docp.text(`Fecha: ${niceDate(inv.date)}`, 42, y); docp.text(`Vence: ${niceDate(inv.dueDate)}`, 360, y); y += 24;
-  docp.setFont('helvetica','bold'); docp.text('Cliente', 42, y); y += 15;
-  docp.setFont('helvetica','normal'); docp.text(String(inv.clientName || c.name || ''), 42, y); y += 14;
-  if(c.phone) { docp.text(`Tel: ${c.phone}`, 42, y); y += 14; }
-  if(c.address || c.city) { docp.text(`Dirección: ${c.address || c.city}`, 42, y, { maxWidth:500 }); y += 24; }
-  y += 8; docp.setFont('helvetica','bold');
-  docp.text('Descripción', 42, y); docp.text('Cant.', 330, y); docp.text('Precio', 400, y); docp.text('Total', 500, y); y += 12;
-  docp.line(42, y, 552, y); y += 18; docp.setFont('helvetica','normal');
-  const items = Array.isArray(inv.items) && inv.items.length ? inv.items : [{description:inv.serviceTitle||inv.invoiceType||'Servicio', qty:1, price:totals.subtotal}];
-  items.forEach(it=>{
-    const desc = String(it.description || 'Servicio');
-    docp.text(desc, 42, y, { maxWidth:260 });
-    docp.text(String(it.qty || 1), 340, y, { align:'right' });
-    docp.text(money(it.price || 0), 455, y, { align:'right' });
-    docp.text(money(lineNet(it)), 552, y, { align:'right' });
-    y += Math.max(20, Math.ceil(desc.length/38)*14);
-    if(y > 720){ docp.addPage(); y = 42; }
-  });
-  y += 12; docp.line(340, y, 552, y); y += 18;
-  docp.text('Subtotal', 380, y); docp.text(money(totals.subtotal), 552, y, { align:'right' }); y += 16;
-  docp.text(`IVU (${totals.taxPercent}%)`, 380, y); docp.text(money(totals.ivu), 552, y, { align:'right' }); y += 20;
-  docp.setFont('helvetica','bold'); docp.setFontSize(14); docp.text('TOTAL', 380, y); docp.text(money(totals.total), 552, y, { align:'right' }); y += 22;
-  docp.setFontSize(11); docp.text('Balance', 380, y); docp.text(money(invoiceBalance(inv)), 552, y, { align:'right' });
-  const blob = docp.output('blob');
-  return new File([blob], filename || `Factura-${inv.number || 'Nexus'}.pdf`, { type:'application/pdf' });
-}
 function invoiceShareText(inv){ return `${state.profile?.businessName || 'Mi negocio'}\nFactura: ${inv.number}\nCliente: ${inv.clientName}\nTotal: ${money(inv.total)}\nEstado: ${invoiceStatus(inv)}\nBalance: ${money(invoiceBalance(inv))}`; }
 function buildInvoicePreviewObject(number='Vista previa'){
   const c = clientBy($('mInvClient')?.value); const calc = invoiceCalc();
-  return { number, date:$('mInvDate')?.value || today(), dueDate:$('mInvDue')?.value || plusDays(15), clientName:c.name || 'Cliente', invoiceType:$('mInvType')?.value || 'Servicio', items:invoiceLines.map(l => ({ description:l.description, qty:l.qty, price:l.price, discount:l.discount, taxable:l.taxable, total:lineNet(l) })), subtotal:calc.subtotal, discount:calc.discount, ivu:calc.ivu, taxPercent:taxRate()*100, total:calc.total, status:$('mInvStatus')?.value || 'Pendiente', notes:$('mInvNotes')?.value || '' };
+  return { number, date:$('mInvDate')?.value || today(), dueDate:$('mInvDue')?.value || plusDays(15), clientId:c.id||'', clientName:c.name || 'Cliente', invoiceType:$('mInvType')?.value || 'Servicio', items:invoiceLines.map(l => ({ description:l.description, qty:l.qty, price:l.price, discount:l.discount, taxable:l.taxable, total:lineNet(l) })), subtotal:calc.subtotal, discount:calc.discount, ivu:calc.ivu, taxPercent:taxRate()*100, total:calc.total, status:$('mInvStatus')?.value || 'Pendiente', notes:$('mInvNotes')?.value || '' };
 }
 
 function niceDate(v){
@@ -883,32 +686,43 @@ function buildDesktopInvoiceDocument(inv){
   const rows = itemList.map(it => `<tr><td>${esc(it.description || 'Servicio')}</td><td>${esc(it.qty || 1)}</td><td>${money(it.price || 0)}</td><td>${money(lineNet(it))}</td></tr>`).join('');
   const note = esc(inv.notes || 'Gracias por confiar en nuestros servicios.');
   const terms = esc(invoicePaymentTerms(inv, inv.terms || inv.conditions || 'Pago a través del método acordado.'));
-  return `<div class="doc-page invoice-pro"><div class="doc-body"><div class="invoice-top"><div class="invoice-brand">${logo ? `<img class="invoice-logo" src="${logo}">` : ''}<div><h1>${esc(p.businessName || 'Empresa')}</h1>${p.email ? `<p>${esc(p.email)}</p>` : ''}</div></div><div class="invoice-contact"><p>${esc(p.address || '')}</p>${p.phone ? `<p>${esc(p.phone)}</p>` : ''}${p.email ? `<p>${esc(p.email)}</p>` : ''}${p.web ? `<p>${esc(p.web)}</p>` : ''}</div></div><div class="invoice-title-row"><div class="invoice-number"><p><b>No. de Factura:</b> ${esc(inv.number || 'Factura')}</p><p><b>Fecha:</b> ${esc(niceDate(inv.date))}</p><p><b>Vence:</b> ${esc(inv.dueDate ? niceDate(inv.dueDate) : '—')}</p></div><h2>FACTURA</h2><div class="status-card"><b>ESTADO</b><span>${esc(status).toUpperCase()}</span></div></div><div class="invoice-rule"></div><div class="invoice-client-grid"><div class="invoice-box"><b>CLIENTE</b><p>${esc(inv.clientName || c.name || '')}</p></div><div class="invoice-box"><p><b>Teléfono:</b> ${esc(c.phone || '—')}</p><p><b>Dirección:</b> ${esc(c.address || c.city || '—')}</p></div></div><table class="doc-table invoice-items"><tr><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>Total</th></tr>${rows}</table><div class="invoice-lower"><div><div class="invoice-box note-box"><b>NOTAS</b><p>${note}</p></div><div class="invoice-box note-box"><b>CONDICIONES</b><p>${terms}</p></div>${p.signature ? `<div class="invoice-sign"><img src="${p.signature}"><br>Firma autorizada</div>` : ''}</div><div class="invoice-totals"><div><b>SUBTOTAL</b><span>${money(totals.subtotal)}</span></div><div><b>IVU (${totals.taxPercent}%)</b><span>${money(totals.ivu)}</span></div><div class="total-row"><b>TOTAL</b><span>${money(totals.total)}</span></div><div><b>PAGADO</b><span>${money(paid)}</span></div><div class="balance-row"><b>BALANCE</b><span>${money(bal)}</span></div></div></div>` + invoiceDocFooter();
+  return `<div class="doc-page invoice-pro"><div class="doc-body"><div class="invoice-top"><div class="invoice-brand">${logo ? `<img class="invoice-logo" src="${logo}">` : ''}<div><h1>${esc(p.businessName || 'Empresa')}</h1>${p.email ? `<p>${esc(p.email)}</p>` : ''}</div></div><div class="invoice-contact"><p>${esc(p.address || '')}</p>${p.phone ? `<p>${esc(p.phone)}</p>` : ''}${p.email ? `<p>${esc(p.email)}</p>` : ''}${p.web ? `<p>${esc(p.web)}</p>` : ''}</div></div><div class="invoice-title-row"><div class="invoice-number"><p><b>No. de Factura:</b> ${esc(inv.number || 'Factura')}</p><p><b>Fecha:</b> ${esc(niceDate(inv.date))}</p><p><b>Vence:</b> ${esc(inv.dueDate ? niceDate(inv.dueDate) : '—')}</p></div><h2>FACTURA</h2><div class="status-card"><b>ESTADO</b><span>${esc(status).toUpperCase()}</span></div></div><div class="invoice-rule"></div><div class="invoice-client-grid"><div class="invoice-box"><b>CLIENTE</b><p>${esc(inv.clientName || c.name || '')}</p></div><div class="invoice-box"><p><b>Teléfono:</b> ${esc(c.phone || '—')}</p><p><b>Dirección:</b> ${esc(c.address || c.city || '—')}</p></div></div><table class="doc-table invoice-items"><tr><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>Total</th></tr>${rows}</table><div class="invoice-lower"><div><div class="invoice-box note-box"><b>NOTAS</b><p>${note}</p></div><div class="invoice-box note-box"><b>CONDICIONES</b><p>${terms}</p></div>${p.signature ? `<div class="invoice-sign"><img src="${p.signature}"><br>Firma autorizada</div>` : ''}</div><div class="invoice-totals"><div><b>SUBTOTAL</b><span>${money(totals.subtotal)}</span></div>${totals.discount?`<div><b>DESCUENTOS</b><span>${money(-totals.discount)}</span></div>`:''}<div><b>IVU (${totals.taxPercent}%)</b><span>${money(totals.ivu)}</span></div><div class="total-row"><b>TOTAL</b><span>${money(totals.total)}</span></div><div><b>PAGADO</b><span>${money(paid)}</span></div><div class="balance-row"><b>BALANCE</b><span>${money(bal)}</span></div></div></div>` + invoiceDocFooter();
 }
 function openInvoiceDoc(id, supplied=null){
   const inv = supplied || state.invoices.find(i => i.id === id);
   if(!inv) return;
   if($('mDocModal').classList.contains('hidden'))documentOrigin=viewMemory.capture();
   currentDocId = inv.id || id || null;
+  currentDocSnapshot = structuredClone(inv);
   $('mDocPreview').innerHTML = buildDesktopInvoiceDocument(inv);
   $('mDocModal').classList.remove('hidden');
 }
-function printCurrentDoc(){
-  const invoiceRef = currentDocId ? docRef('invoices', currentDocId) : null;
-  window.addEventListener('afterprint', () => {
-    setTimeout(async () => {
-      const printed=confirm(invoiceRef?'¿Se imprimió la factura?':'¿Se imprimió el documento?');
-      try{if(invoiceRef&&printed)await updateDoc(invoiceRef,{printedAt:serverTimestamp()});}
-      catch(error){console.error(error);alert('No se pudo guardar la marca de impresión.');}
-      finally{closeDoc();}
-    },0);
-  },{once:true});
-  window.print();
+async function printCurrentDoc(){
+ const inv=currentInvoiceDocument(),name=invoiceFilename(inv),btn=$('mPrintDoc');
+ if(btn.disabled)return;btn.disabled=true;btn.textContent='Preparando PDF…';
+ // Open the browser's native PDF viewer, not the HTML preview. On iOS,
+ // the native share sheet offers Print / AirPrint and Save to Files.
+ let target=null;
+ if(!isIOS())try{target=window.open('','_blank');if(target){target.document.title='Preparando factura';target.document.body.textContent='Preparando PDF…';target.opener=null;}}catch{}
+ try{
+  const file=await buildInvoicePdfFile(inv,name);
+  if(isIOS()&&navigator.share&&navigator.canShare?.({files:[file]})){
+   try{await navigator.share({title:name,files:[file]});showMobileNotice('Selecciona Imprimir en el menú de compartir.','ok');return;}
+   catch(e){if(e.name==='AbortError')return;}
+  }
+  if(isIOS()){
+   downloadPdfFile(file,name);showMobileNotice('Abre el PDF desde Archivos y selecciona Compartir → Imprimir.','ok');return;
+  }
+  const url=URL.createObjectURL(file);
+  if(target&&!target.closed){target.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),600000);showMobileNotice('Imprime desde el visor PDF.','ok');}
+  else{URL.revokeObjectURL(url);downloadPdfFile(file,name);showMobileNotice('Abre el PDF descargado y selecciona Imprimir.','ok');}
+ }catch(e){try{target?.close();}catch{}showMobileNotice('No se pudo preparar la impresión: '+e.message,'danger');}
+ finally{btn.disabled=false;btn.textContent='Imprimir PDF';}
 }
-function closeDoc(){ $('mDocModal').classList.add('hidden');if(documentOrigin)viewMemory.restore(documentOrigin);documentOrigin=null; }
+function closeDoc(){ $('mDocModal').classList.add('hidden');currentDocSnapshot=null;if(documentOrigin)viewMemory.restore(documentOrigin);documentOrigin=null; }
 async function shareCurrentDoc(){
   if(currentDocId) return shareInvoice(currentDocId);
-  const preview = buildInvoicePreviewObject('Vista previa');
+  const preview = currentInvoiceDocument();
   const filename = 'Factura-Vista-Previa.pdf';
   try{
     const file = await buildInvoicePdfFile(preview, filename);

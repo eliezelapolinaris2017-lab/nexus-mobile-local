@@ -41,3 +41,6 @@ Colecciones nuevas compatibles con respaldos anteriores: expenses, suppliers, pu
 
 ## Dominio oficial: nova.nexustoolspr.com
 Preparación de migración: CORS mantiene el origen de GitHub Pages y admite https://nova.nexustoolspr.com. La redirección de Auth elige el origen actual. Antes de cambiar dominio: verificar respaldo sincronizado y exportar copia local, añadir https://nova.nexustoolspr.com/ a Redirect URLs de Supabase Auth y conservar la URL anterior; verificar dominio con GitHub, configurar Custom domain en Pages y luego CNAME DNS nova → eliezelapolinaris2017-lab.github.io, activar HTTPS. El nuevo origen usa IndexedDB separado; ingresar con la misma cuenta y recuperar datos cloud, no crear otra empresa. No quitar la instalación anterior hasta verificar los datos y enlaces previos. No se activa CNAME automáticamente en este commit para evitar un corte prematuro.
+
+## Nova 3.0.3
+Factura PDF tamaño carta US Letter. Guardar, compartir e imprimir usan el mismo generador; impresión abre PDF nativo en escritorio o el menú Compartir de iOS. No se imprime la página HTML ni se marca como impresa sin confirmación real. Descuentos separados, líneas largas paginadas, totales completos y numeración de páginas. No cambia datos ni cálculos guardados.

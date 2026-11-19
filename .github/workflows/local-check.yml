@@ -28,6 +28,7 @@ jobs:
           node --check cloud.js
           node --check alerts.js
           node --check finance.js
+          node --check invoice-pdf.js
           node tests/finance.mjs
           node tests/alerts.mjs
           node --check sw.js
