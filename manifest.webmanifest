@@ -1,7 +1,7 @@
 {
   "name": "Nova Cloud",
   "short_name": "Nova Cloud",
-  "description": "Gestión empresarial en la nube",
+  "description": "Gestión empresarial y diagnóstico HVAC",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -6,7 +6,8 @@ import { createAgenda } from './agenda.js';
 import { createAlertCenter } from './alerts.js';
 import { createFinance } from './finance.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
-const APP_VERSION = 'NOVA 3.0.3';
+import { setupHvac } from './hvac-codes.js';
+const APP_VERSION = 'NOVA 3.1 HVAC';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -99,10 +100,10 @@ let documentOrigin=null;
 function switchTab(id){
   if (!document.getElementById(id)?.classList.contains('mobile-view')) return;
   viewMemory.save();
-  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mCalculator:'Calculadora de precio',mAlerts:'Centro de notificaciones',mFinance:'Control financiero'};
+  const titles = {mDashboard:'Tu operación en la calle',mServices:'Trabajos pendientes',mInvoice:'Nueva factura',mInvoices:'Facturas',mClients:'Clientes',mFollowups:'Seguimientos',mHistory:'Historial',mSync:'Configuración y respaldo',mMore:'Más herramientas',mAgenda:'Agenda de trabajo',mReceivable:'Cuentas por cobrar',mHvac:'Diagnóstico HVAC',mAlerts:'Centro de notificaciones',mFinance:'Control financiero'};
   document.querySelector('.mobile-top p').textContent = titles[id] || 'Nexus Mobile Local';
   document.querySelectorAll('.mobile-tabs button').forEach(b => {
-    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mCalculator','mAlerts','mFinance'].includes(id));
+    const selected = b.dataset.tab === id || (b.dataset.tab === 'mMore' && ['mFollowups','mHistory','mSync','mAgenda','mReceivable','mHvac','mAlerts','mFinance'].includes(id));
     b.setAttribute('aria-current', selected ? 'page' : 'false');
   });
   document.querySelectorAll('.mobile-view').forEach(v => v.classList.toggle('active', v.id === id));
@@ -809,17 +810,12 @@ function renderMobileTools(){
   const filtered=invoices.filter(i=>normalizeClientSearch([i.number,i.clientName,clientBy(i.clientId).name].join(' ')).includes(q));
   $('mReceivableList').innerHTML=filtered.length?filtered.map(i=>`<article class="row-card"><div class="top"><div><h4>${esc(i.clientName||clientBy(i.clientId).name||'Cliente')}</h4><p>${esc(i.number||'Factura')} · Vence ${esc(i.dueDate||'Sin fecha')}</p></div>${statusBadge(invoiceStatus(i))}</div><p>Balance <b>${money(invoiceBalance(i))}</b></p><div class="actions"><button data-edit-invoice="${esc(i.id)}" type="button">Editar factura</button><button data-view-invoice="${esc(i.id)}" type="button">Ver factura</button><button data-share-invoice="${esc(i.id)}" type="button">Compartir</button><button data-mark-paid="${esc(i.id)}" type="button">Saldar factura</button></div></article>`).join(''):'<div class="empty">No hay balances para esta búsqueda.</div>';
 }
-function calculateMobilePrice(){
-  const amount=Math.max(0,Number($('mCalcAmount').value)||0),discount=Math.min(100,Math.max(0,Number($('mCalcDiscount').value)||0)),rate=Math.min(100,Math.max(0,Number($('mCalcTax').value)||0));
-  const net=amount*(1-discount/100),tax=net*rate/100;
-  $('mCalcResult').innerHTML=`<div class="summary-row"><span>Descuento</span><b>${money(amount-net)}</b></div><div class="summary-row"><span>Subtotal</span><b>${money(net)}</b></div><div class="summary-row"><span>IVU</span><b>${money(tax)}</b></div><div class="summary-row total"><span>Total</span><b>${money(net+tax)}</b></div>`;
-}
+
 $('mReceivableSearch')?.addEventListener('input',renderMobileTools);
 $('mFollowSearch')?.addEventListener('input',renderFollowups);
-for(const id of ['mCalcAmount','mCalcDiscount','mCalcTax'])$(id)?.addEventListener('input',calculateMobilePrice);
-calculateMobilePrice();
+setupHvac($,esc);
 
 $('mInvoicesSearch')?.addEventListener('input',()=>{mobileInvoiceListLimit=40;renderMobileInvoiceList();});
 $('mInvoicesStatus')?.addEventListener('change',()=>{mobileInvoiceListLimit=40;renderMobileInvoiceList();});
 
-setupStandalone({$,state,COLS,colRef,docRef,clientBy,today,switchTab,ensureLines,renderInvoiceLines,renderAll,renderSummary,calculateMobilePrice,setSync,showMobileNotice});
+setupStandalone({$,state,COLS,colRef,docRef,clientBy,today,switchTab,ensureLines,renderInvoiceLines,renderAll,renderSummary,setSync,showMobileNotice});

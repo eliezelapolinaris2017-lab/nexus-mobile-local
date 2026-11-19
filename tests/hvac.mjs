@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {HVAC_CODES,searchHvac} from '../hvac-codes.js';
+assert.ok(HVAC_CODES.length>=100);
+assert.equal(new Set(HVAC_CODES.map(x=>x.brand+'|'+x.series+'|'+x.code)).size,HVAC_CODES.length);
+assert.ok(searchHvac('E1','Midea').some(x=>x.category==='Comunicación'));
+assert.ok(searchHvac('E1','Gree').some(x=>x.category==='Refrigerante'));
+assert.equal(searchHvac('EC 07','Midea')[0].code,'EC07');
+assert.equal(searchHvac('ch 05','LG')[0].code,'CH05');
+assert.ok(searchHvac('sensor','','Sensores').every(x=>x.category==='Sensores'));
+assert.equal(searchHvac('ZZZZ999').length,0);
+console.log('HVAC: '+HVAC_CODES.length+' referencias; 8 comprobaciones correctas');

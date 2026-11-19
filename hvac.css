@@ -1,0 +1,37 @@
+/* HVAC identity: accessible module icons, not tiny flex-shrunk marks. */
+@media screen{
+#mobileApp #mMore .tool-grid{gap:12px!important;align-items:stretch}
+#mobileApp #mMore .tool-grid button{display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:8px!important;min-height:142px!important;padding:15px!important;border-radius:18px!important;background:#fff!important;border:1px solid #dce5ed!important;box-shadow:0 5px 15px #18334e09!important;--tool-accent:#1c587d;--tool-bg:#e5eff7}
+#mobileApp #mMore .tool-grid button svg.app-icon{box-sizing:content-box!important;display:block!important;flex:0 0 26px!important;width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;max-width:none!important;max-height:none!important;padding:11px!important;border-radius:13px!important;background:var(--tool-bg)!important;color:var(--tool-accent)!important;stroke:currentColor!important;stroke-width:2!important}
+#mobileApp #mMore .tool-grid button[data-tab=mFinance]{--tool-accent:#16634e;--tool-bg:#dff2e8}
+#mobileApp #mMore .tool-grid button[data-tab=mReceivable]{--tool-accent:#1a6654;--tool-bg:#e3f2ec}
+#mobileApp #mMore .tool-grid button[data-tab=mAlerts]{--tool-accent:#8b4818;--tool-bg:#faeee0}
+#mobileApp #mMore .tool-grid button[data-tab=mAgenda]{--tool-accent:#185b86;--tool-bg:#e3f0f9}
+#mobileApp #mMore .tool-grid button[data-tab=mFollowups]{--tool-accent:#764b22;--tool-bg:#f7eddf}
+#mobileApp #mMore .tool-grid button[data-tab=mHistory],#mobileApp #mMore .tool-grid button[data-tab=mSync]{--tool-accent:#46596b;--tool-bg:#e8edf3}
+#mobileApp #mMore .tool-grid button[data-tab=mHvac]{--tool-accent:#076b78;--tool-bg:#d8f1f2;border-color:#aad9dd!important}
+#mobileApp #mMore .tool-grid button b{font-size:16px!important;font-weight:800!important;color:#172e42!important}
+#mobileApp #mMore .tool-grid button small{font-size:13px!important;color:#43586a!important;line-height:1.4!important}
+#mobileApp .nova-accent,#mobileApp .field-heading>span,#mobileApp .nova-eyebrow{color:#126a82!important}
+#mobileApp .mobile-tabs button[aria-current=page]{background:#e3f1f5!important;color:#125b75!important}
+#mobileApp .mobile-tabs button[data-tab=mInvoice] svg{background:#14657e!important;color:white!important}
+#mobileApp .nova-mark{background:#144a65!important}
+#mobileApp #mHvac [hidden]{display:none!important}
+#mobileApp .hvac-search{display:grid;gap:10px;margin:14px 0}
+#mobileApp .hvac-search input,#mobileApp .hvac-search select{min-height:48px;font-size:16px!important}
+.hvac-disclaimer{background:#f1f5f8;border:1px solid #d8e2eb;border-radius:12px;padding:12px;color:#344b5c;font-size:13px!important;line-height:1.5}
+.hvac-disclaimer b{display:block;margin-bottom:3px}
+#hvacCount{font-size:14px;font-weight:750;color:#3b576a;margin:14px 0}
+.hvac-record{background:white;border:1px solid #dce5ec;border-radius:17px;padding:15px;display:grid;gap:9px;color:#183246}
+.hvac-record-head{display:flex;gap:12px;align-items:center}
+.hvac-code{background:#def1f3;color:#0c5965;padding:10px;min-width:75px;text-align:center;border-radius:12px;font-size:22px;font-weight:850;letter-spacing:-.04em}
+.hvac-record-head>div{display:grid;gap:4px;min-width:0}
+.hvac-record-head small{font-size:12px;color:#4c6174;overflow-wrap:anywhere}
+.hvac-meaning{font-size:16px;font-weight:750;margin:0;line-height:1.4}
+.hvac-tag{color:#436177;font-size:12px;font-weight:700}
+.hvac-record summary{cursor:pointer;font-weight:700;color:#155b78;min-height:36px;padding-top:7px}
+.hvac-record details p{font-size:14px;line-height:1.55}
+.hvac-record a{color:#125b75;font-size:14px;font-weight:700;display:inline-block;padding:8px 0}
+#hvacMore{width:100%;min-height:44px;margin-top:10px}
+@media(max-width:360px){#mobileApp #mMore .tool-grid button{padding:12px!important;min-height:145px!important}#mobileApp #mMore .tool-grid button b{font-size:15px!important}}
+}
