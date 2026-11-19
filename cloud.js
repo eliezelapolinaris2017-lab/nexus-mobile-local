@@ -3,6 +3,18 @@ import {cloudSnapshot,acknowledgeCloud,applyCloudSnapshot} from './local-db.js';
 const BASE='https://cgpfpxueqciefclonghz.supabase.co';
 const API='sb_publishable_C80PjdtDeDfIT2z5EnUh5g_CiOUlUoG';
 const SESSION='nova-cloud-session-v1';
+const AUTH_RETURN='https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/';
+let nextSignupAt=0,authWorking=false;
+function authError(e){
+ const code=e.code||'';
+ if(e.status===429||code==='over_email_send_rate_limit'||code==='over_request_rate_limit')return 'Supabase ha limitado temporalmente los envíos de correo. No crees otra cuenta. Usa el enlace de verificación que ya recibiste y luego inicia sesión; si no llegó, vuelve a intentar más tarde.';
+ if(code==='email_not_confirmed')return 'Verifica tu correo electrónico y vuelve a NOVA para iniciar sesión.';
+ if(code==='invalid_credentials'||/invalid login credentials/i.test(e.message))return 'Correo o contraseña incorrectos. Si ya creaste y verificaste tu cuenta, utiliza esos mismos datos.';
+ if(code==='user_already_exists')return 'Ya existe una cuenta con este correo. Inicia sesión.';
+ if(code==='email_address_not_authorized')return 'El servicio gratuito de correo de Supabase todavía no admite esta dirección. Es necesario configurar un remitente SMTP autorizado.';
+ return e.message||'No se pudo conectar. Comprueba tu internet.';
+}
+function authControls(busy){authWorking=busy;document.querySelectorAll('[data-cloud-form] button[type=submit]').forEach(b=>{b.disabled=busy;});}
 const LEGACY='nexus-local-confirmations-config-v1';
 export const PROJECT_REF='cgpfpxueqciefclonghz';
 let ready=false,openApp=null,transitioning=false;
@@ -13,7 +25,7 @@ async function activateConfirmations(importLegacy=false){const key=importLegacy?
 const el=id=>document.getElementById(id);
 function view(stage){el('mobileAuth').classList.toggle('hidden',stage==='app');el('mobileApp').classList.add('hidden');el('novaLoginPanel').hidden=stage!=='login';el('novaOnboarding').hidden=stage!=='onboarding';el('novaMigration').hidden=stage!=='migration';el('novaAuthTitle').textContent=stage==='onboarding'?'Configura tu empresa.':stage==='migration'?'Vincula tu negocio.':'Bienvenido a NOVA.';el('novaAuthSubtitle').textContent=stage==='onboarding'?'PASO 2 DE 2 · TU EMPRESA':stage==='migration'?'CONSERVA TUS DATOS':'PASO 1 DE 2 · TU CUENTA';}
 function message(s){el('mobileAuthMsg').textContent=s||'';}
-async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));}
+async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));schedule();}
 async function hydrate(){
  if(!session||transitioning)return;transitioning=true;ready=false;
  try{
@@ -36,9 +48,9 @@ export async function finishOnboarding(importLegacy=false){
  transitioning=true;
  try{const local=await assertOwner(),owner=session.user.id;if(!local.snapshot.profile)throw Error('Completa los datos de tu empresa.');if(!navigator.onLine)throw Error('Conéctate a internet para guardar tu empresa.');
  const existing=await getRow(owner);
- if(existing){if(!local.binding||local.binding.owner!==owner)throw Error('Ya existe una empresa en la nube. Recupérala en lugar de reemplazarla.');}
+ if(existing){if(!local.binding||local.binding.owner!==owner)throw Error('Ya existe una empresa en la nube. Recupérala en lugar de reemplazarla.');await activateConfirmations(importLegacy);}
  else{await activateConfirmations(importLegacy);const result=await request('/rest/v1/nova_workspaces?select=revision,updated_at',{method:'POST',access:await access(),prefer:'return=representation',body:{owner_id:owner,snapshot:local.snapshot}});if(!result?.[0])throw Error('No se pudo verificar la primera copia.');await acknowledgeCloud(owner,0,Number(result[0].revision),local.revision);synced(result[0]);}
- await activateConfirmations(importLegacy);await enter();message('');
+ await enter();message('');
  }finally{transitioning=false;}
 }
 let session=null,busy=false,timer=null,refreshPromise=null,stopped=false;
@@ -48,9 +60,13 @@ async function request(path,{method='GET',body,access,prefer}={}){
  const headers={apikey:API,'Content-Type':'application/json'};
  if(access)headers.Authorization='Bearer '+access;
  if(prefer)headers.Prefer=prefer;
- const r=await fetch(BASE+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:AbortSignal.timeout(20000),referrerPolicy:'no-referrer'});
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+ let r;
+ try{r=await fetch(BASE+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:controller.signal,referrerPolicy:'no-referrer'});}
+ catch(e){if(e.name==='AbortError')throw Error('La conexión tardó demasiado. Reintenta sin borrar tus datos.');throw e;}
+ finally{clearTimeout(timeout);}
  const v=await r.json().catch(()=>null);
- if(!r.ok){const e=Error(v?.msg||v?.message||v?.error_description||v?.error||'No se pudo conectar a Supabase.');e.status=r.status;throw e;}
+ if(!r.ok){const e=Error(v?.msg||v?.message||v?.error_description||v?.error||'No se pudo conectar a Supabase.');e.status=r.status;e.code=v?.error_code||v?.code||v?.error||'';throw e;}
  return v;
 }
 function useSession(s){if(!s?.access_token||!s?.refresh_token||!s?.user?.id)throw Error('Verifica tu correo e inicia sesión.');saveSession({access_token:s.access_token,refresh_token:s.refresh_token,user:{id:s.user.id,email:s.user.email},expires_at:s.expires_at||Math.floor(Date.now()/1000)+(s.expires_in||3600)});}
@@ -60,7 +76,12 @@ async function access(){
  if(!refreshPromise){refreshPromise=request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:session.refresh_token}}).then(s=>{useSession(s);return session.access_token;}).catch(e=>{if(e.status===400||e.status===401){saveSession(null);location.reload();}throw e;}).finally(()=>refreshPromise=null);}
  return refreshPromise;
 }
-function paint(msg){document.querySelectorAll('[data-cloud-status]').forEach(e=>e.textContent=msg);document.querySelectorAll('[data-cloud-login]').forEach(e=>e.hidden=!!session);document.querySelectorAll('[data-cloud-actions]').forEach(e=>e.hidden=!session);}
+function paint(msg){document.querySelectorAll('[data-cloud-status]').forEach(e=>e.textContent=msg);document.querySelectorAll('[data-cloud-login]').forEach(e=>e.hidden=!!session);document.querySelectorAll('[data-cloud-actions]').forEach(e=>e.hidden=!session);
+ const pill=el('mobileSync');if(!pill||!ready)return;
+ pill.dataset.cloudMode='active';
+ const state=msg.startsWith('☁ Guardado')?'saved':msg.startsWith('Sin internet')?'offline':msg.startsWith('Guardando')?'pending':/Conflicto|versión más reciente|Pendiente de sincronizar/i.test(msg)?'warning':'pending';
+ pill.dataset.cloudState=state;pill.textContent=state==='saved'?'☁ En Supabase':state==='offline'?'Sin internet':state==='warning'?'Revisar guardado':'Sincronizando…';
+}
 const rowPath=owner=>'/rest/v1/nova_workspaces?owner_id=eq.'+encodeURIComponent(owner);
 async function getRow(owner,full=false){const rows=await request(rowPath(owner)+'&select='+(full?'revision,snapshot,updated_at':'revision,updated_at'),{access:await access()});return rows?.[0]||null;}
 async function assertOwner(){const local=await cloudSnapshot();if(local.binding&&local.binding.owner!==session.user.id)throw Error('Este dispositivo está vinculado a otra cuenta. No se subirán ni reemplazarán datos.');return local;}
@@ -106,19 +127,27 @@ async function recover(){
  finally{busy=false;}
 }
 async function authenticate(email,password,signup){
- if(busy)return;busy=true;
+ if(busy||authWorking||transitioning)return;
+ if(signup&&Date.now()<nextSignupAt){paint('Ya solicitaste un correo. Revisa la bandeja de entrada y spam; no crees otra cuenta.');return;}
+ busy=true;authControls(true);paint(signup?'Creando tu cuenta privada…':'Verificando tu acceso…');
  try{
-  if(signup){const s=await request('/auth/v1/signup',{method:'POST',body:{email,password}});if(!s?.access_token){paint('Cuenta solicitada. Busca el correo de verificación y después inicia sesión.');return;}useSession(s);}
+  if(signup){nextSignupAt=Date.now()+60000;const s=await request('/auth/v1/signup?redirect_to='+encodeURIComponent(AUTH_RETURN),{method:'POST',body:{email,password}});if(!s?.access_token){paint('Revisa tu correo y abre el enlace de verificación. Regresa aquí e inicia sesión con el mismo correo y contraseña. No necesitas crear otra cuenta.');return;}useSession(s);}
   else useSession(await request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}}));
   const local=await cloudSnapshot();
   if(local.binding&&local.binding.owner!==session.user.id){saveSession(null);paint('Este dispositivo pertenece a otra cuenta. No se movieron datos.');return;}
   paint('Sesión iniciada. Consultando Supabase…');
- }catch(e){paint('No se pudo iniciar sesión: '+e.message);}
- finally{busy=false;if(session){await hydrate();if(ready)sync();}}
+ }catch(e){paint(authError(e));}
+ finally{busy=false;authControls(false);if(session){await hydrate();if(ready)sync();}}
 }
 async function logout(){if(busy||transitioning)return;if(!confirm('¿Cerrar sesión? Los registros locales se conservarán.'))return;stopped=true;ready=false;try{if(session)await request('/auth/v1/logout',{method:'POST',access:await access()});}catch{}finally{saveSession(null);location.reload();}}
-function schedule(){clearTimeout(timer);timer=setTimeout(()=>sync(),1600);}
+function schedule(){clearTimeout(timer);timer=setTimeout(()=>sync(),500);}
 export function setupCloud(onOpen){openApp=onOpen;view('login');
+ // The email confirmation flow may redirect with a session in the URL. Never
+ // retain raw tokens in the URL or accept a session without explicit login.
+ const fragment=new URLSearchParams(location.hash.slice(1));
+ const returned=fragment.has('access_token')||fragment.has('error')||fragment.has('error_code');
+ const returnedError=fragment.has('error')||fragment.has('error_code');
+ if(returned)history.replaceState(null,'',location.pathname+location.search);
  document.querySelectorAll('[data-cloud-form]').forEach(form=>{
   form.addEventListener('submit',e=>{e.preventDefault();const email=form.querySelector('[name=email]').value.trim(),password=form.querySelector('[name=password]').value,signup=e.submitter?.dataset.mode==='signup';if(password.length<8){paint('La contraseña debe tener al menos 8 caracteres.');return;}form.querySelector('[name=password]').value='';authenticate(email,password,signup);});
  });
@@ -127,7 +156,7 @@ export function setupCloud(onOpen){openApp=onOpen;view('login');
  document.querySelectorAll('[data-cloud-logout],[data-cloud-exit]').forEach(b=>b.addEventListener('click',logout));
  el('novaMigrateLocal').addEventListener('click',async()=>{if(!confirm('¿Vincular los datos de este dispositivo a tu cuenta NOVA? Se conservarán los registros y enlaces anteriores.'))return;try{await finishOnboarding(true);}catch(e){message(e.message);}});
  el('novaMigrateRemote').addEventListener('click',recover);el('novaRetryAccount').addEventListener('click',hydrate);
- window.addEventListener('nova-local-change',schedule);window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
+ window.addEventListener('nova-local-change',()=>{if(ready)paint(navigator.onLine?'Guardando cambios en Supabase…':'Sin internet · guardado local.');schedule();});window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
  window.addEventListener('focus',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});setInterval(()=>{if(!document.hidden)sync();},30000);
- paint(session?'Consultando Supabase…':'Inicia sesión o crea tu cuenta privada.');if(session)hydrate();
+ paint(session?'Consultando Supabase…':returned?(returnedError?'El enlace de verificación no pudo completarse. Regresa a tu correo o inicia sesión si ya lo verificaste.':'Regresaste de la verificación. Inicia sesión con tu correo y contraseña.'):'Inicia sesión o crea tu cuenta privada.');if(session)hydrate();
 }

@@ -27,3 +27,6 @@ Supabase Auth + RLS por usuario. La tabla nova_workspaces almacena una copia JSO
 
 ## NOVA 2.4 — cuenta primero
 Supabase Auth, onboarding de empresa y activación automática de confirmaciones por usuario. Vincular una empresa local conserva registros y reclama la credencial anterior sin copiarla. No se sobrescribe una copia remota distinta. Almacenamiento local no cifrado: usar origen exclusivo y bloqueo del dispositivo antes de producción. Pruebas reales pendientes.
+
+## NOVA 2.4.1
+Mensajes de autenticación en español y control de solicitudes simultáneas; redirección de correo solicitada hacia la app (la URL debe estar autorizada en Supabase Auth). Indicador de sincronización basado en la respuesta de Supabase, no solamente en IndexedDB. Se conserva la verificación del correo y la protección de datos por usuario.

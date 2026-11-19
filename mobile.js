@@ -3,7 +3,7 @@ import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
 import { createAgenda } from './agenda.js';
-const APP_VERSION = 'NOVA 2.4';
+const APP_VERSION = 'NOVA 2.4.1';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -44,7 +44,7 @@ function isStandalone(){ return window.matchMedia('(display-mode: standalone)').
 function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
 function isIOSPWA(){ return isIOS() && isStandalone(); }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
-function setSync(text){ const el = $('mobileSync'); if(el) el.textContent = text; }
+function setSync(text){ const el = $('mobileSync'); if(el&&!el.dataset.cloudMode) el.textContent = text; }
 function showMobileNotice(message, type='info'){
   let box = document.querySelector('.mobile-notice');
   if(!box){ box = document.createElement('div'); box.className = 'mobile-notice'; document.body.appendChild(box); }
