@@ -15,3 +15,6 @@ https://eliezelapolinaris2017-lab.github.io/nexus-mobile-local/ — GitHub Pages
 
 ## Diseño NOVA 2.0
 Nueva capa visual móvil: panel de cobros, tarjetas de acceso, navegación renovada, formularios legibles y diseño adaptativo. Se conserva la base IndexedDB y la implementación de documentos y operaciones. Los datos existentes no se migran ni se borran.
+
+## Agenda 2.1
+Calendario mensual, citas por fecha, creación y edición local de horarios, advertencia de solapamientos, clientes, estados, facturación y rutas. Las citas son trabajos de la misma colección local; no hay sincronización con calendarios externos.

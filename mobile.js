@@ -2,7 +2,8 @@ import { searchClients, normalizeClientSearch } from './client-search.js';
 import { createViewMemory } from './ui-context.js';
 import { collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,serverTimestamp,nextInvoiceNumber,createInvoiceWithPayment,settleInvoice } from './local-db.js';
 import { setupStandalone } from './standalone-ui.js';
-const APP_VERSION = 'Local 2.0.2';
+import { createAgenda } from './agenda.js';
+const APP_VERSION = 'Local 2.1';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';
@@ -103,6 +104,7 @@ function switchTab(id){
   document.querySelectorAll('.mobile-view').forEach(v => v.classList.toggle('active', v.id === id));
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   viewMemory.recall();
+  if(id==='mAgenda')agenda.render();
 }
 
 document.addEventListener('click', async e => {
@@ -247,6 +249,7 @@ async function saveMobileClient(e){
   switchTab('mInvoice');
   if(!state.clients.some(c=>c.id===ref.id))state.clients.push({id:ref.id,...payload});
   renderSelects();
+  if(agenda.acceptNewClient(ref.id)){$('mNewClientPanel').open=false;returnClientPicker=null;return;}
   const picker=returnClientPicker||'mInvClient';returnClientPicker=null;
   $('mNewClientPanel').open=false;
   if(picker==='mFollowClient'){switchTab('mFollowups');document.querySelector('.follow-create').open=true;}
@@ -977,14 +980,11 @@ document.addEventListener('click',e=>{
   const add=e.target.closest('[data-add-client]');
   if(add){returnClientPicker=add.dataset.addClient;switchTab('mClients');$('mNewClientPanel').open=true;$('mClientName').focus({preventScroll:true});$('mNewClientPanel').scrollIntoView({block:'start',behavior:'smooth'});return;}
   if(!e.target.closest('.client-picker'))for(const id of ['mInvClient','mFollowClient']){$(id+'Results').hidden=true;$(id+'Search').setAttribute('aria-expanded','false');}
-  const agenda=e.target.closest('[data-agenda-filter]');if(agenda){agendaFilter=agenda.dataset.agendaFilter;document.querySelectorAll('[data-agenda-filter]').forEach(b=>b.classList.toggle('active',b===agenda));renderMobileTools();}
   const history=e.target.closest('[data-client-history]');if(history){$('mHistorySearch').value=clientBy(history.dataset.clientHistory).name||'';renderHistory();switchTab('mHistory');}
 });
-let agendaFilter='next';
+const agenda=createAgenda({$,state,clientBy,today,esc,phoneLink,statusBadge,colRef,docRef,addDoc,updateDoc,serverTimestamp,switchTab,showMobileNotice});
 function renderMobileTools(){
-  const now=today(),end=plusDays(7);
-  const services=sorted(state.services).filter(s=>!['Completado','Completada','Cancelado','Cancelada','Facturado'].includes(s.status||s.fields?.[3]||'')).filter(s=>agendaFilter==='today'?s.date===now:agendaFilter==='overdue'?s.date&&s.date<now:s.date>=now&&s.date<=end).reverse();
-  $('mAgendaList').innerHTML=services.length?services.map(s=>{const c=clientBy(s.clientId),address=c.address||c.city;return `<article class="row-card"><div class="top"><div><h4>${esc(s.clientName||c.name||'Cliente')}</h4><p>${esc(s.title||s.serviceType||'Servicio')}</p></div>${statusBadge(s.status||'Pendiente')}</div><p>${esc(s.date||'Sin fecha')} ${esc(s.time||'')}</p><p>${esc(address||'Sin dirección')}</p><div class="actions">${address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}" target="_blank" rel="noopener">Ver ruta</a>`:''}<button data-new-invoice-client="${esc(c.id||'')}" type="button">Facturar cliente</button></div></article>`;}).join(''):'<div class="empty">No hay trabajos en este periodo.</div>';
+  agenda.render();
   const q=normalizeClientSearch($('mReceivableSearch').value);
   const invoices=sorted(state.invoices).filter(i=>!['Cancelada','Borrador'].includes(invoiceStatus(i))&&invoiceBalance(i)>0);
   $('mReceivableTotal').textContent=money(invoices.reduce((a,i)=>a+invoiceBalance(i),0))+' pendiente · '+invoices.length+' facturas';
