@@ -7,7 +7,7 @@ import { createAlertCenter } from './alerts.js';
 import { createFinance } from './finance.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
 import { setupHvac } from './hvac-codes.js';
-const APP_VERSION = 'NOVA 3.1 HVAC';
+const APP_VERSION = 'NOVA 3.1.1 HVAC';
 let deferredInstallPrompt = null;
 let updateWaiting = null;
 let currentFilter = 'all';

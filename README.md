@@ -47,3 +47,5 @@ Factura PDF tamaño carta US Letter. Guardar, compartir e imprimir usan el mismo
 
 ## Nova Cloud 3.1 HVAC
 Catálogo offline de 152 referencias por fabricante y serie (Midea, Gree, Daikin, Panasonic, LG). Las definiciones son orientativas y llevan enlaces de origen; los códigos no son universales. Las comprobaciones por categoría no sustituyen el manual de servicio ni autorizan puentear protecciones. Se elimina únicamente la calculadora rápida; IVU de factura, configuración y finanzas se conservan. Iconos redimensionados y colores HVAC de alto contraste. No se altera el generador de facturas.
+
+3.1.1: reutiliza el icono oficial Nova Cloud en el encabezado y acceso, conserva el nombre de la empresa y renueva la caché PWA.
