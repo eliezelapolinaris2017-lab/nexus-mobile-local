@@ -25,7 +25,32 @@ async function activateConfirmations(importLegacy=false){const key=importLegacy?
 const el=id=>document.getElementById(id);
 function view(stage){el('mobileAuth').classList.toggle('hidden',stage==='app');el('mobileApp').classList.add('hidden');el('novaLoginPanel').hidden=stage!=='login';el('novaOnboarding').hidden=stage!=='onboarding';el('novaMigration').hidden=stage!=='migration';el('novaPasswordReset').hidden=stage!=='reset';el('novaAuthTitle').textContent=stage==='reset'?'Recupera tu acceso.':stage==='onboarding'?'Configura tu empresa.':stage==='migration'?'Vincula tu negocio.':'Bienvenido a NOVA.';el('novaAuthSubtitle').textContent=stage==='reset'?'SEGURIDAD DE CUENTA':stage==='onboarding'?'PASO 2 DE 2 · TU EMPRESA':stage==='migration'?'CONSERVA TUS DATOS':'PASO 1 DE 2 · TU CUENTA';}
 function message(s){el('mobileAuthMsg').textContent=s||'';}
-async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));schedule();}
+// Account entitlement is calculated by Supabase, not the device clock.
+let billingBusy=false;
+function paintBilling(title,detail,state='pending'){
+ const card=el('novaBillingCard');if(!card)return;
+ card.dataset.state=state;el('novaBillingTitle').textContent=title;el('novaBillingDetail').textContent=detail;
+}
+async function refreshBilling(){
+ if(!session||billingBusy)return;
+ if(!navigator.onLine){paintBilling('Sin conexión','Conéctate a internet para consultar el estado de tu plan. Tus datos locales se conservan.');return;}
+ billingBusy=true;const owner=session.user.id;
+ try{
+  const result=await request('/rest/v1/rpc/nova_billing_status',{method:'POST',access:await access(),body:{}});
+  if(session?.user.id!==owner)return;
+  if(!result||typeof result.status!=='string')throw Error('Estado de plan no disponible');
+  const ms=Date.parse(result.trial_ends_at)-Date.parse(result.server_time);
+  const days=Math.max(0,Math.ceil(ms/86400000));
+  const date=Number.isFinite(Date.parse(result.trial_ends_at))?new Date(result.trial_ends_at).toLocaleDateString('es-PR',{year:'numeric',month:'long',day:'numeric',timeZone:'America/Puerto_Rico'}):'';
+  if(result.status==='founder')paintBilling('Cuenta fundadora','Tu acceso actual se conserva durante el lanzamiento. No hay cobros automáticos.','active');
+  else if(result.status==='active')paintBilling('Plan activo','Acceso vigente.','active');
+  else if(result.status==='trialing'&&Number.isFinite(ms))paintBilling('Prueba gratuita · '+days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s'),'Disponible hasta el '+date+'. Sin tarjeta ni cobros automáticos.','active');
+  else if(result.status==='trial_ended')paintBilling('Prueba finalizada','Tu información permanece disponible. Los cobros y las restricciones estarán disponibles cuando se active la facturación.','ended');
+  else paintBilling('Plan pendiente','Confirma tu correo para iniciar la prueba.');
+ }catch(e){if(session?.user.id===owner)paintBilling('No se pudo consultar el plan','Reintenta con conexión a internet. El acceso y tus datos no se modificaron.');}
+ finally{billingBusy=false;}
+}
+async function enter(){await openApp();ready=true;el('mobileAuth').classList.add('hidden');el('mobileApp').classList.remove('hidden');window.dispatchEvent(new Event('nova-cloud-ready'));refreshBilling();schedule();}
 async function hydrate(){
  if(!session||transitioning)return;transitioning=true;ready=false;
  try{
@@ -204,7 +229,7 @@ export function setupCloud(onOpen){openApp=onOpen;view('login');
  document.querySelectorAll('[data-cloud-logout],[data-cloud-exit]').forEach(b=>b.addEventListener('click',logout));
  el('novaMigrateLocal').addEventListener('click',async()=>{if(!confirm('¿Vincular los datos de este dispositivo a tu cuenta NOVA? Se conservarán los registros y enlaces anteriores.'))return;try{await finishOnboarding(true);}catch(e){message(e.message);}});
  el('novaMigrateRemote').addEventListener('click',recover);el('novaRetryAccount').addEventListener('click',hydrate);
- el('novaResendConfirmation').addEventListener('click',resendConfirmation);el('novaForgotPassword').addEventListener('click',requestReset);el('novaResetForm').addEventListener('submit',resetPassword);el('novaCancelReset').addEventListener('click',()=>{recoveryToken=null;el('novaResetForm').reset();view('login');message('');});el('novaLoadBackups').addEventListener('click',listBackups);
+ el('novaResendConfirmation').addEventListener('click',resendConfirmation);el('novaForgotPassword').addEventListener('click',requestReset);el('novaResetForm').addEventListener('submit',resetPassword);el('novaCancelReset').addEventListener('click',()=>{recoveryToken=null;el('novaResetForm').reset();view('login');message('');});el('novaLoadBackups').addEventListener('click',listBackups);el('novaBillingRetry')?.addEventListener('click',refreshBilling);window.addEventListener('online',refreshBilling);window.addEventListener('focus',()=>{if(ready)refreshBilling();});
  window.addEventListener('nova-local-change',()=>{if(ready)paint(navigator.onLine?'Guardando cambios en Supabase…':'Sin internet · guardado local.');schedule();});window.addEventListener('online',schedule);window.addEventListener('offline',()=>paint('Sin internet · guardado local.'));
  window.addEventListener('focus',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});setInterval(()=>{if(!document.hidden)sync();},30000);
  if(recoveryToken){view('reset');message('Introduce tu contraseña nueva.');return;}
