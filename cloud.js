@@ -39,14 +39,9 @@ async function refreshBilling(){
   const result=await request('/rest/v1/rpc/nova_billing_status',{method:'POST',access:await access(),body:{}});
   if(session?.user.id!==owner)return;
   if(!result||typeof result.status!=='string')throw Error('Estado de plan no disponible');
-  const ms=Date.parse(result.trial_ends_at)-Date.parse(result.server_time);
-  const days=Math.max(0,Math.ceil(ms/86400000));
-  const date=Number.isFinite(Date.parse(result.trial_ends_at))?new Date(result.trial_ends_at).toLocaleDateString('es-PR',{year:'numeric',month:'long',day:'numeric',timeZone:'America/Puerto_Rico'}):'';
   if(result.status==='founder')paintBilling('Cuenta fundadora','Tu acceso actual se conserva durante el lanzamiento. No hay cobros automáticos.','active');
   else if(result.status==='active')paintBilling('Plan activo','Acceso vigente.','active');
-  else if(result.status==='trialing'&&Number.isFinite(ms))paintBilling('Prueba gratuita · '+days+' día'+(days===1?'':'s')+' restante'+(days===1?'':'s'),'Disponible hasta el '+date+'. Sin tarjeta ni cobros automáticos.','active');
-  else if(result.status==='trial_ended')paintBilling('Prueba finalizada','Tu información permanece disponible. Los cobros y las restricciones estarán disponibles cuando se active la facturación.','ended');
-  else paintBilling('Plan pendiente','Confirma tu correo para iniciar la prueba.');
+  else paintBilling('Facturación pendiente','La contratación estará disponible próximamente.');
  }catch(e){if(session?.user.id===owner)paintBilling('No se pudo consultar el plan','Reintenta con conexión a internet. El acceso y tus datos no se modificaron.');}
  finally{billingBusy=false;}
 }
